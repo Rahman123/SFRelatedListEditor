@@ -1,3 +1,0 @@
-<apex:page standardController="Contact" extensions="MC4SF.SubscriptionsController">
-	<c:Subscriptions subscriberIds="{!theSubscriberIds}" returnUrl="{!theReturnUrl}" returnText="{!theReturnText}"/>
-</apex:page>
