@@ -116,14 +116,17 @@
         
         //Update the items from cells
         cellComponents.forEach(function(cellCmp){
+            var itemId = cellCmp.get("v.item").Id;                        
+            var item = items.filter(function(elt){
+                return elt.Id == itemId;
+            }).pop();
+            
             var column = cellCmp.get("v.column");
-            var item = items[cellCmp.get("v.itemRank")];
             
-            item[column.name] = cellCmp.get("v.value");  
-            
+            item[column.name] = cellCmp.get("v.value");              
             if(column.type=='Reference'){
                 item[column.name + '__Name'] = cellCmp.get("v.refLabel");
-            }
+            }    
         });
         
         return items;
@@ -157,29 +160,7 @@
         var columns = component.get("v.columns");
         var aggregations = Array(columns.length).fill("");     	
         
-       	if(items && items.length > 0){  
-            //Update Items 
-            items.forEach(function(item){
-                columns.forEach(function(column, index){
-                    if(column.type=='Percent'){ 
-                        if(item[column.name] && !item[column.name + '__Updated']){
-                            item[column.name] = item[column.name]/100;
-                            item[column.name + '__Updated'] = true;
-                        }
-                    }
-                    
-                    if(column.type=='Reference'){
-                        var lookupField = column.name.endsWith('__c')?
-                            column.name.replace('__c', '__r'):
-                        column.name.substring(0, column.name.length -2);
-                        
-                        if(item[lookupField]){
-                            item[column.name + '__Name'] = item[lookupField]['Name'];
-                        }
-                    }
-                })
-            });            
-            
+       	if(items && items.length > 0){              
             //Apply Aggregate
             var json_aggregate = component.get("v.aggregate");                
             
@@ -228,26 +209,31 @@
         
         this.cleanItems(component, newItems);
     },
-    notifyItemCreated : function(component, recordId){
-        //Load the new item from Salesforce
-        var getObjectAction = component.get("c.getObject");
-        getObjectAction.setParams({
-            "objectId": recordId
+    notifyItemCreated : function(component, recordId){        
+        var dataAction = component.get("c.getReleatedItems");       
+        var recordFilter = JSON.stringify({Id : recordId});
+        
+        dataAction.setParams({
+            "objectName": component.get("v.relatedObjectName"),
+            "fieldSetName": component.get("v.fieldSetName"),                       
+            "filterBy": recordFilter,
+            "sortBy": null,
+            "orderBy": null
         });	
         
-        getObjectAction.setCallback(this, function(res) {                                    
+        dataAction.setCallback(this, function(res) {                                    
             if (res.getState() === "SUCCESS") {                 
                 var newItems = component.get("v.items");
-                newItems.push(res.getReturnValue());
+                newItems.push(res.getReturnValue()[0]);
                 
                 //Clean the items list
-                this.cleanItems(component, newItems);                
+                this.cleanItems(component, newItems, true);                
             }
             else if (res.getState() === "ERROR") {
                 $A.log("Errors", res.getError());
             }
         });   
         
-        $A.enqueueAction(getObjectAction);    		        
+        $A.enqueueAction(dataAction);       		        
     }
 })

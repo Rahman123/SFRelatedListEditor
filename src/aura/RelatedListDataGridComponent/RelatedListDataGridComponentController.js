@@ -22,7 +22,8 @@
                     if (res.getState() === "SUCCESS" && res.getReturnValue()) {        
                         component.set("v.relatedListName", res.getReturnValue().name);
                         component.set("v.relatedObjectName",  res.getReturnValue().sobject);
-                        component.set("v.columns", res.getReturnValue().columns);                                               
+                        component.set("v.refFieldName", res.getReturnValue().field);
+                        component.set("v.columns", res.getReturnValue().columns); 
                         
                         //Set the viewAll Link
                         var viewAllLink = helper.viewAllUrl(component.get("v.recordId"),
@@ -185,20 +186,6 @@
             $A.enqueueAction(deleteAction);            
         }                
     },
-    editCallback: function(component, event, helper) {
-        if (event.getParam('confirmResult')){
-            var loaderDialog = component.find("loaderDialog");
-            loaderDialog.set('v.title', 'Saving ' + event.getParam('context').Name);
-            loaderDialog.set("v.content", "Please wait while saving the record"); 
-            loaderDialog.set('v.showDialog', true);           
-        }
-    },
-    saveCallback: function(component, event, helper) {
-        var loaderDialog = component.find("loaderDialog");         
-        loaderDialog.set('v.showDialog', false); 
-        
-        helper.notifyItemUpdated(component, event.getParam('context'));                   
-    },
     actionDelete : function(component, event, helper){       
         var deleteDialog = component.find("deleteDialog"); 
         var item = event.getParam('item');
@@ -208,11 +195,5 @@
         deleteDialog.set('v.context', item);
         
         deleteDialog.set('v.showDialog', true);        
-    },
-    actionEdit : function(component, event, helper){                    
-        var editDialog = component.find('editDialog');
-        
-        editDialog.set('v.context', event.getParam('item'));                       
-        editDialog.set('v.showDialog', true);         
-    }    
+    } 
 })

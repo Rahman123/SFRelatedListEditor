@@ -24,6 +24,450 @@ public with sharing class RelatedListDataGridController {
     private static List<SObjectField> mockFieldSetMemberList;
     
     /**
+    * Return the list of related metadata information
+    * */
+    @AuraEnabled
+    public static Object[] getReleatedListsMetadata(Id objectId)
+    {
+        String recordTypeName = RestAPIUtils.getObjectRecordTypeName(objectId);
+        if(recordTypeName=='Master' || recordTypeName=='Principal'){
+            recordTypeName = null;
+        }
+        Object[] relatedListsMetatdata = RestAPIUtils.getRelatedListsMetadata(objectId, 
+                                                                              recordTypeName);
+        
+        for(Object relatedListMetadata : relatedListsMetatdata){
+            cleanRelatedListMetadata((Map<String, Object>)relatedListMetadata); 
+        }
+        
+        return relatedListsMetatdata;
+    }
+    
+    /**
+    * Return the metadata of the related list
+    * */
+    @AuraEnabled
+    public static Object getReleatedListMetadata(Id objectId, 
+                                                 String relatedListLabel)
+    {
+        String recordTypeName = RestAPIUtils.getObjectRecordTypeName(objectId);
+        if(recordTypeName=='Master' || recordTypeName=='Principal'){
+            recordTypeName = null;
+        }
+        Object[] relatedListsMetatdata = RestAPIUtils.getRelatedListsMetadata(objectId, 
+                                                                              recordTypeName);
+        
+        for(Object relatedListMetadata : relatedListsMetatdata){
+            Map<String, Object> mRelatedListMetadata = (Map<String, Object>)relatedListMetadata;
+            if(mRelatedListMetadata.get('label') == relatedListLabel){
+                cleanRelatedListMetadata(mRelatedListMetadata); 
+                return mRelatedListMetadata;
+            }
+        }           
+        
+        return null;
+    }        
+           
+     /**
+    * Return the the related list items from the related list
+    * We don't need a REST API once we have the columns
+    * */
+    @AuraEnabled
+    public static Object[] getReleatedItems(Id objectId, 
+                                            String relatedObjName,
+                                            String refFieldName,
+                                            String[] relatedFields,
+                                            String filterBy,
+                                            String sortBy,
+                                            String orderBy)
+    {        
+        String query = 'Select ';        
+        Map<String, Object> filterMap = null;
+        List<Map<String,Object>> jsonItems = null;
+        
+        SObjectType relatedObjectType =  Schema.getGlobalDescribe().get(relatedObjName);    
+        Schema.DescribeSobjectResult relatedDescribe = relatedObjectType.getDescribe();
+        Map<String, Schema.SObjectField> fieldsMap = relatedDescribe.fields.getMap();
+        Map<String, String> lookupFieldsMap = new Map<String, String>();
+        
+        //Build the query based on the columns                      
+        for(String fieldName : relatedFields) {            
+            String fieldApiName = getFieldApiName(fieldName);
+                           
+            if(fieldsMap.containsKey(fieldApiName)){        
+                Schema.SObjectField sfield = fieldsMap.get(fieldApiName);
+                DescribeFieldResult fieldDescResult = sfield.getDescribe();                             
+                if(fieldDescResult.isAccessible()){
+                    if(fieldDescResult.getType() == Schema.DisplayType.REFERENCE){
+                        query += fieldApiName + ', ' + fieldName + ', '; 
+                        lookupFieldsMap.put(fieldApiName, fieldName);
+                    }
+                    else {
+                        query += fieldApiName + ', '; 
+                    }
+                }  
+            }
+        }            
+        query += 'Id From ' + relatedObjName;
+        
+        //Apply filter
+        if(filterBy != null){
+            List<String> filterList = new List<String>{refFieldName + '=\'' + objectId  + '\''};
+                
+            filterMap = (Map<String, Object>)JSON.deserializeUntyped(filterBy);            
+            for(String field : filterMap.keySet()){
+                filterList.add(field + '=\'' +  filterMap.get(field) + '\'');
+            }
+            
+            query += ' Where ' + String.join(filterList , ' And ');                    
+        }
+        
+        //Apply sort
+        if(String.isNotBlank(sortBy)){
+            query +=  ' Order By ' + sortBy; 
+            //Apply order (DESC/ASC)
+            if(orderBy != null){
+                query +=  ' ' + orderBy; 
+            }
+        }      
+        
+        System.debug(query); 
+        
+        //Execute the query
+        SObject[] items = Database.query(query);  
+        
+        if(items != null && items.size()>0){
+            jsonItems = new List<Map<String,Object>>();            
+            for(SObject item : items){ 
+                jsonItems.add((Map<String, Object>)JSON.deserializeUntyped(
+                    JSON.serialize(item)
+                ));
+            }
+            
+            Map<String, DescribeFieldResult> lookupFields = new Map<String,DescribeFieldResult>();  
+            Map<String, DescribeFieldResult> percentFields = new Map<String,DescribeFieldResult>();    
+            
+            for(Schema.SObjectField sfield : fieldsMap.Values()){ 
+                DescribeFieldResult fieldDescResult = sfield.getDescribe();                
+                if(fieldDescResult.getType()==Schema.DisplayType.REFERENCE){                        
+                    lookupFields.put(fieldDescResult.getName(), fieldDescResult);
+                }                                 
+                
+                if(fieldDescResult.getType()==Schema.DisplayType.PERCENT){                        
+                    percentFields.put(fieldDescResult.getName(), fieldDescResult);
+                } 
+            }           
+            
+            //Update the lookup field 
+            for(String fieldKey : lookupFields.keySet()){
+                for(Map<String,Object> item : jsonItems){                    
+                    if(item.containsKey(fieldKey) && item.get(fieldKey)!= null){
+                        String fieldName = lookupFieldsMap.get(fieldKey);
+                        Map<String,Object> lookupObj = (Map<String,Object>)item.get(fieldName.substringBefore('.'));                         
+                        item.put(fieldKey + '__Name', lookupObj.get(fieldName.substringAfter('.')));
+                    }
+                }                               
+            }
+            
+            //Update the percent field 
+            for(String fieldKey : percentFields.keySet()){                
+                for(Map<String,Object> item : jsonItems){
+                    if(item.get(fieldKey) != null){
+                        item.put(fieldKey, (decimal)item.get(fieldKey)/100);
+                    }
+                }
+            }    
+        }
+        
+        return jsonItems;        
+    } 
+           
+    /**
+    * Save the related list items
+    * */
+    @AuraEnabled
+    public static Boolean saveRelatedListItems(String jsonData)
+    {
+        List<SObject> sObjectsItems = new List<SObject>();
+        
+        Object[] items = (Object[])JSON.deserializeUntyped(jsonData);
+        
+        for(Object obj : items) {
+            Map<String, Object> mObj = (Map<String, Object>)obj;
+            
+            //Init the SObject instance
+            Id objId = (Id)mObj.get('Id');
+            Schema.SObjectType objType = objId.getSobjectType();
+            SObject sObj = objType.newSObject(objId);
+            
+            //Update the fields
+            for(String field : mObj.keySet()){
+                Schema.SObjectField sfield = objType.getDescribe().fields.getMap().get(field);
+                if(sfield != null && sfield.getDescribe().isUpdateable()){
+                    if(sfield.getDescribe().getType() == Schema.DisplayType.DATE){
+                        if(mObj.get(field) != null){
+                            String dateStr = ((String)mObj.get(field)) + ' 00:00:00';
+                            sObj.put(field, Date.valueOf(dateStr));                                                
+                        }
+                    }
+                    else if(sfield.getDescribe().getType() == Schema.DisplayType.DATETIME){
+                        if(mObj.get(field) != null){
+                            String datetimeStr = ((String)mObj.get(field)).replace('T', ' ').replace('000Z', '');
+                            sObj.put(field, Datetime.valueOf(datetimeStr));                    
+                        }
+                    }
+                    else if(sfield.getDescribe().getType() == Schema.DisplayType.PERCENT){
+                        if(mObj.get(field) != null){                            
+                            sObj.put(field, (decimal)mObj.get(field)*100);                    
+                        }
+                    }
+                    else if(sfield.getDescribe().getType() == Schema.DisplayType.PICKLIST){
+                        Schema.DescribeFieldResult fieldDescribe = sfield.getDescribe();
+                        List<Schema.PicklistEntry> entries = fieldDescribe.getPicklistValues();
+                        if(fieldDescribe.isNillable() && String.isEmpty((String)mObj.get(field))){
+                            sObj.put(field, null); 
+                        }
+                        else{
+                            for(Schema.PicklistEntry entry : entries){
+                                if(entry.getValue()==mObj.get(field)){
+                                    sObj.put(field, mObj.get(field)); 
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    else{                        
+                        sObj.put(field, mObj.get(field));                    
+                    }                    
+                }                    
+            }
+            
+            sObjectsItems.add(sObj);
+        }
+        
+        update sObjectsItems;
+        return true;
+    } 
+    
+    /**
+     * Search Candiate for Lookup Field
+     * */
+    @AuraEnabled
+	public static Object[] getLookupCandidates(String refObjName, String searchTerm) 
+    {
+		String qname = '%' + searchTerm + '%';
+		
+		if(isSafeObject(refObjName) && isSafeField('Name', refObjName)){
+	        return Database.query('Select Id, Name From ' + 
+	        					  refObjName + 
+	            				  ' Where Name Like :qname Limit 5');
+		}
+		
+		return null;
+	}
+	    	    
+    /**
+    * Delete a related record
+    * */
+    @AuraEnabled
+    public static Boolean deleteRelatedRecord(Id objectId)
+    {
+        Schema.SObjectType sobjectType = objectId.getSObjectType();
+        String sobjectName = sobjectType.getDescribe().getName();
+        
+        if(isSafeObject(sobjectName)) {
+            Database.DeleteResult result = Database.delete(objectId);            
+            return result.isSuccess();
+        }
+        return False;
+    }        
+    
+    /**
+    * Create the object based on a json
+    * */
+    @AuraEnabled
+    public static Id createRelatedObject(Id objectId,
+                                         String objectName,
+                                         String jsonData)
+    {
+        if(isSafeObject(objectName)){
+            Map<String, Object> defaultValues = (Map<String, Object>)JSON.deserializeUntyped(jsonData);
+            SObjectType relatedObjectType =  Schema.getGlobalDescribe().get(objectName);    
+            Schema.DescribeSobjectResult relatedDescribe = relatedObjectType.getDescribe();
+            
+            SObject relatedObject = relatedObjectType.newSObject();
+            
+            //Update the fields from default values
+            for(String field : relatedDescribe.fields.getMap().keySet()){    
+                Schema.DescribeFieldResult sfield = relatedDescribe.fields.getMap().get(field).getDescribe();   
+                if(isSafeField(sfield.getName(), objectName)){
+                    if(defaultValues.containsKey(field)){  
+                        String defaultValue = (String)defaultValues.get(field);
+                        
+                        if(sfield.getType() == Schema.DisplayType.DATE){
+                            String dateStr = defaultValue + ' 00:00:00';
+                            relatedObject.put(field, Date.valueOf(dateStr));                                                
+                        }                    
+                        else if(sfield.getType() == Schema.DisplayType.DATETIME){
+                            String datetimeStr = defaultValue.replace('T', ' ').replace('000Z', '');
+                            relatedObject.put(field, Datetime.valueOf(datetimeStr));                                            
+                        }
+                        else if(sfield.getType() == Schema.DisplayType.REFERENCE &&
+                                defaultValue.toUpperCase().startsWith('SELECT')){
+                            System.debug('Set default value for ' + sfield.getName() + ' from ' + defaultValue);                                                                                    
+                            List<SObject> results = Database.query(defaultValue);
+                            if(results != null && results.size() > 0){
+                                relatedObject.put(field, results[0].Id);
+                            }                        
+                        }     
+                        else{
+                            relatedObject.put(field, defaultValues.get(field));                    
+                        }
+                    }                    
+                }
+            }                
+            
+            insert relatedObject;            
+            return relatedObject.Id;
+        }
+        
+        return null;
+    } 
+    
+    /**
+    * Return the metadata of the fieldSet
+    * */
+    @AuraEnabled
+    public static Object getFieldSetMetadata(String objectName, 
+                                             String fielSetName)
+    {
+        Map<String, Object> mFieldSetMetadata = null;        
+        FieldSetUtils.IFieldSet fieldSet = getFieldSet(objectName, fielSetName);
+        
+        if(fieldSet != null){
+            mFieldSetMetadata = new Map<String, Object>();                
+            //Set the name 
+            mFieldSetMetadata.put('name', fieldSet.getName());                
+            //Set the label
+            mFieldSetMetadata.put('label', fieldSet.getLabel());                
+            //Set the object name 
+            mFieldSetMetadata.put('sobject', objectName);                
+            
+            //Set the columns 
+            Map<String, Object> mColumns = new Map<String, Object>();
+            mFieldSetMetadata.put('columns', getFieldSetColumns(objectName, fieldSet));  
+        }       
+        
+        return mFieldSetMetadata;
+    }  
+    
+    /**
+    * Return the the fieldSet items
+    * */
+    @AuraEnabled
+    public static Object[] getFieldSetItems(String objectName, 
+                                            String fieldSetName,
+                                            String filterBy,
+                                            String sortBy,
+                                            String orderBy)
+    {                    
+        List<Map<String,Object>> jsonItems = null;
+        
+        FieldSetUtils.IFieldSet fieldSet = getFieldSet(objectName, fieldSetName);        
+        if(fieldSet != null) {
+            String query = 'Select ';
+            
+            Map<String, DescribeFieldResult> lookupFields = new Map<String,DescribeFieldResult>();  
+            Map<String, DescribeFieldResult> percentFields = new Map<String,DescribeFieldResult>();    
+            
+            SObjectType relatedObjectType =  Schema.getGlobalDescribe().get(objectName);    
+            Schema.DescribeSobjectResult relatedDescribe = relatedObjectType.getDescribe();
+            
+            for(FieldSetUtils.IFieldSetMember fieldMember : fieldSet.getFields()) {
+                String fieldName = fieldMember.getFieldPath();                                                            
+                Schema.SObjectField sfield = relatedDescribe.fields.getMap().get(fieldName);
+                
+                if(sfield != null){
+                    DescribeFieldResult fieldDescResult = sfield.getDescribe();                             
+                    if(fieldDescResult.isAccessible()){
+                        if(fieldDescResult.getType() == Schema.DisplayType.REFERENCE){
+                            query += fieldName + ', ' + getLookupNamePath(fieldName) + ', '; 
+                            lookupFields.put(fieldName, fieldDescResult);
+                        }
+                        if(fieldDescResult.getType() == Schema.DisplayType.PERCENT){
+                            query += fieldName + ', '; 
+                            percentFields.put(fieldName, fieldDescResult);
+                        }
+                        else {
+                            query += fieldName + ', '; 
+                        }
+                    }
+                }                    
+            }
+            
+            query += 'Id From ' + objectName;
+            
+            //Apply filter
+            if(filterBy != null){
+                Map<String, Object> filterMap = 
+                    (Map<String, Object>)JSON.deserializeUntyped(filterBy);
+                
+                List<String> filterList = new List<String>();
+                for(String field : filterMap.keySet()){
+                    filterList.add(field + '=\'' +  filterMap.get(field) + '\'');
+                }
+                
+                if(filterList.size()>0){
+                    query += ' Where ' + String.join(filterList , ' And ');                    
+                }
+            }
+            
+            //Apply sort
+            if(String.isNotBlank(sortBy)){
+                query +=  ' Order By ' + sortBy; 
+                //Apply order
+                if(orderBy != null){
+                    query +=  ' ' + orderBy; 
+                }
+            }              
+            
+            //Execute the query
+            SObject[] items = Database.query(query);  
+            
+            if(items != null && items.size()>0){
+                jsonItems = new List<Map<String,Object>>();            
+                for(SObject item : items){ 
+                    jsonItems.add((Map<String, Object>)JSON.deserializeUntyped(
+                        JSON.serialize(item)
+                    ));
+                }
+                
+                //Update the lookup field 
+                for(String fieldKey : lookupFields.keySet()){
+                    for(Map<String,Object> item : jsonItems){                    
+                        if(item.containsKey(fieldKey) && item.get(fieldKey)!= null){
+                            String fieldName = getLookupNamePath(fieldKey);
+                            Map<String,Object> lookupObj = (Map<String,Object>)item.get(fieldName.substringBefore('.'));                         
+                            item.put(fieldKey + '__Name', lookupObj.get(fieldName.substringAfter('.')));
+                        }
+                    }                               
+                }
+                
+                //Update the percent field 
+                for(String fieldKey : percentFields.keySet()){                
+                    for(Map<String,Object> item : jsonItems){
+                        if(item.get(fieldKey) != null){
+                            item.put(fieldKey, (decimal)item.get(fieldKey)/100);
+                        }
+                    }
+                }    
+            }                        
+        }
+        
+        return jsonItems;
+    }     
+    
+    /**
     * Clean the related list metadata
 	* -If the field is AutoNumber or Calculated set the type to Formula. Otherwise set the type from the map
 	* -If the column is not an inner field set the type to Reference
@@ -99,389 +543,6 @@ public with sharing class RelatedListDataGridController {
     }
     
     /**
-    * Return the list of related metadata information
-    * */
-    @AuraEnabled
-    public static Object[] getReleatedListsMetadata(Id objectId)
-    {
-        String recordTypeName = RestAPIUtils.getObjectRecordTypeName(objectId);
-        if(recordTypeName=='Master' || recordTypeName=='Principal'){
-            recordTypeName = null;
-        }
-        Object[] relatedListsMetatdata = RestAPIUtils.getRelatedListsMetadata(objectId, 
-                                                                              recordTypeName);
-        
-        for(Object relatedListMetadata : relatedListsMetatdata){
-            cleanRelatedListMetadata((Map<String, Object>)relatedListMetadata); 
-        }
-        
-        return relatedListsMetatdata;
-    }
-    
-    /**
-    * Return the metadata of the related list
-    * */
-    @AuraEnabled
-    public static Object getReleatedListMetadata(Id objectId, 
-                                                 String relatedListLabel)
-    {
-        String recordTypeName = RestAPIUtils.getObjectRecordTypeName(objectId);
-        if(recordTypeName=='Master' || recordTypeName=='Principal'){
-            recordTypeName = null;
-        }
-        Object[] relatedListsMetatdata = RestAPIUtils.getRelatedListsMetadata(objectId, 
-                                                                              recordTypeName);
-        
-        for(Object relatedListMetadata : relatedListsMetatdata){
-            Map<String, Object> mRelatedListMetadata = (Map<String, Object>)relatedListMetadata;
-            if(mRelatedListMetadata.get('label') == relatedListLabel){
-                cleanRelatedListMetadata(mRelatedListMetadata); 
-                return mRelatedListMetadata;
-            }
-        }           
-        
-        return null;
-    }        
-    
-    /**
-    * Return the the related list items
-    * */
-    @AuraEnabled
-    public static Object[] getReleatedListItems(Id objectId, 
-                                                String relatedlistName)
-    {            
-        Object[] items = RestAPIUtils.getRelatedListItems(objectId, 
-                                                          relatedlistName);
-        if(items.size()>0){        
-            Id firstChildId = (Id)((Map<String, Object>) items.get(0)).get('Id');            
-        	DescribeSObjectResult objectDescResult = firstChildId.getSobjectType().getDescribe();
-            
-        	Map<String, DescribeFieldResult> lookupFields = new Map<String,DescribeFieldResult>();  
-            Map<String, DescribeFieldResult> percentFields = new Map<String,DescribeFieldResult>();    
-            
-            for(Schema.SObjectField sfield : objectDescResult.fields.getMap().Values()){ 
-                DescribeFieldResult fieldDescResult = sfield.getDescribe();                
-                if(fieldDescResult.getType()==Schema.DisplayType.REFERENCE){                        
-                    lookupFields.put(fieldDescResult.getName(), fieldDescResult);
-                }                                 
-                
-                if(fieldDescResult.getType()==Schema.DisplayType.PERCENT){                        
-                    percentFields.put(fieldDescResult.getName(), fieldDescResult);
-                } 
-            }   
-			
-            //Set the lookup labels based on the field type
-            for(String fieldKey : lookupFields.keySet()){
-                Set<Id> lookupIds = new Set<Id>();
-                Map<Id, List<Object>> lookupMap = new Map<Id, List<Object>>();                
-                
-                //Build the list of IDs
-                for(Object item : items){
-                    Map<String, Object> mItem = (Map<String, Object>) item;
-                    if(mItem.containsKey(fieldKey)){
-                        Id lookupId = (Id)mItem.get(fieldKey);
-                        if(lookupId != null){
-                            lookupIds.add(lookupId); 
-                            if(!lookupMap.containsKey(lookupId)){
-                                lookupMap.put(lookupId, new List<Object>());
-                            }
-                            lookupMap.get(lookupId).add(mItem);
-                        }                        
-                    }
-                }
-                               
-                //Do SOQL query based on the ID list
-                if(!lookupIds.isEmpty()){
-                    SObject[] lookupObjs = getLookupObjects(lookupIds);                 
-                    for(SObject lookupObj : lookupObjs){
-                        for(Object item : lookupMap.get(lookupObj.Id)){
-                            Map<String, Object> mItem = (Map<String, Object>) item;
-                            try{                            	
-                                mItem.put(fieldKey + '__Name', lookupObj.get('Name'));                                                                                        
-                            }
-                            catch(Exception e){
-                                System.debug(e.getMessage());
-                                mItem.put(fieldKey + '__Name', 'Undefined'); 
-                            }
-                        }
-                    }
-                }
-            }
-                        
-            //Update the percent field 
-            for(String fieldKey : percentFields.keySet()){                
-                for(Object item : items){                    
-                    Map<String, Object> mItem = (Map<String, Object>) item;
-                    if(mItem.get(fieldKey) != null){
-	                    mItem.put(fieldKey, (decimal)mItem.get(fieldKey)/100);
-                    }
-                }
-            }    
-            
-            return items;                    
-        }
-                
-        return null;
-    } 
-    
-    /**
-     * Return the list of objects based on the lookup ids
-     * */
-    private static SObject[] getLookupObjects(Set<Id> lookupIds)
-    {
-        Schema.SObjectType sobjectType = (new list<Id>(lookupIds))[0].getSObjectType();
-        String sobjectName = sobjectType.getDescribe().getName();
-        
-        if(isSafeObject(sobjectName) && isSafeField('Name', sobjectName)){
-        	return Database.query('Select Id, Name From ' + 
-	                              sobjectName + 
-	                              ' Where Id in :lookupIds');
-        }
-        
-        return null;                   
-    }
-    
-    /**
-    * Save the related list items
-    * */
-    @AuraEnabled
-    public static Boolean saveRelatedListItems(String jsonData)
-    {
-        List<SObject> sObjectsItems = new List<SObject>();
-        
-        Object[] items = (Object[])JSON.deserializeUntyped(jsonData);
-        
-        for(Object obj : items) {
-            Map<String, Object> mObj = (Map<String, Object>)obj;
-            
-            //Init the SObject instance
-            Id objId = (Id)mObj.get('Id');
-            Schema.SObjectType objType = objId.getSobjectType();
-            SObject sObj = objType.newSObject(objId);
-            
-            //Update the fields
-            for(String field : mObj.keySet()){
-                Schema.SObjectField sfield = objType.getDescribe().fields.getMap().get(field);
-                if(sfield != null && sfield.getDescribe().isUpdateable()){
-                    if(sfield.getDescribe().getType() == Schema.DisplayType.DATE){
-                        if(mObj.get(field) != null){
-                            String dateStr = ((String)mObj.get(field)) + ' 00:00:00';
-                            sObj.put(field, Date.valueOf(dateStr));                                                
-                        }
-                    }
-                    else if(sfield.getDescribe().getType() == Schema.DisplayType.DATETIME){
-                        if(mObj.get(field) != null){
-                            String datetimeStr = ((String)mObj.get(field)).replace('T', ' ').replace('000Z', '');
-                            sObj.put(field, Datetime.valueOf(datetimeStr));                    
-                        }
-                    }
-                    else if(sfield.getDescribe().getType() == Schema.DisplayType.PERCENT){
-                        if(mObj.get(field) != null){                            
-                            sObj.put(field, (decimal)mObj.get(field)*100);                    
-                        }
-                    }
-                    else if(sfield.getDescribe().getType() == Schema.DisplayType.PICKLIST){
-                        Schema.DescribeFieldResult fieldDescribe = sfield.getDescribe();
-                        List<Schema.PicklistEntry> entries = fieldDescribe.getPicklistValues();
-                        if(fieldDescribe.isNillable() && String.isEmpty((String)mObj.get(field))){
-                            sObj.put(field, null); 
-                        }
-                        else{
-                            for(Schema.PicklistEntry entry : entries){
-                                if(entry.getValue()==mObj.get(field)){
-                                    sObj.put(field, mObj.get(field)); 
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    else{                        
-                        sObj.put(field, mObj.get(field));                    
-                    }                    
-                }                    
-            }
-            
-            sObjectsItems.add(sObj);
-        }
-        
-        update sObjectsItems;
-        return true;
-    } 
-    
-    /**
-     * Search Candiate for Lookup Field
-     * */
-    @AuraEnabled
-	public static Object[] getLookupCandidates(String refObjName, String searchTerm) {
-		String qname = '%' + searchTerm + '%';
-		
-		if(isSafeObject(refObjName) && isSafeField('Name', refObjName)){
-	        return Database.query('Select Id,Name From ' + 
-	        					  refObjName + 
-	            				  ' Where Name Like :qname Limit 5');
-		}
-		
-		return null;
-	}
-	
-    /**
-    * Check if the object is safe to use
-    * */
-	private static boolean isSafeObject(String objName){
-	    Map <String, Schema.SObjectType> schemaMap = Schema.getGlobalDescribe();
-	    SObjectType myObj = schemaMap.get(objName);
-	    
-	    return (myObj != null && myObj.getDescribe().isAccessible()); 
-	}
-	
-    /**
-    * Check if the field is safe to use
-    * */
-	private static boolean isSafeField(String fieldName, String objName){
-	    	Map <String, Schema.SObjectType> schemaMap = Schema.getGlobalDescribe();
-	    	SObjectType myObj = schemaMap.get(objName);
-	    	
-	        SObjectField myField = myObj.getDescribe().fields.getMap().get(fieldName);
-	        return (myField != null && myField.getDescribe().isAccessible());	    
-	}	
-    
-    /**
-    * Delete a related record
-    * */
-    @AuraEnabled
-    public static Boolean deleteRelatedRecord(Id objectId){
-        Schema.SObjectType sobjectType = objectId.getSObjectType();
-        String sobjectName = sobjectType.getDescribe().getName();
-        
-        if(isSafeObject(sobjectName)) {
-            Database.DeleteResult result = Database.delete(objectId);            
-            return result.isSuccess();
-        }
-        return False;
-    }
-    
-    /**
-    * Return the object details
-    * */
-    @AuraEnabled
-    public static Object getObject(Id objectId)
-    {            
-        
-        List<String> queryFields = new List<String>();
-        
-        DescribeSObjectResult objectDescResult = objectId.getSobjectType().getDescribe();        
-        Map<String, DescribeFieldResult> lookupFields = new Map<String,DescribeFieldResult>();            
-        
-        for(Schema.SObjectField sfield : objectDescResult.fields.getMap().Values()){ 
-            DescribeFieldResult fieldDescResult = sfield.getDescribe(); 
-            
-            if(fieldDescResult.isAccessible()){
-                queryFields.add(fieldDescResult.getName());                 
-                if(fieldDescResult.getType()==Schema.DisplayType.REFERENCE){                        
-                    lookupFields.put(fieldDescResult.getName(), fieldDescResult);
-                }  
-            }
-        }
-        
-        String query = 'Select ' + String.join(queryFields, ', ') +
-            ' From ' + String.valueOf(objectId.getSobjectType()) + 
-        	' Where Id=\'' + objectId + '\'';
-        
-        System.debug(query);
-        SObject item = Database.query(query); 
-        
-        if(item != null){            
-            Map<String, Object> mItem = (Map<String, Object>)
-                JSON.deserializeUntyped(JSON.serialize(item));
-            
-            
-            //Set the lookup labels based on the field type
-            for(String fieldKey : lookupFields.keySet()){
-                Set<Id> lookupIds = new Set<Id>();
-                
-                //Build the list of IDs            
-                if(mItem.containsKey(fieldKey)){
-                    Id lookupId = (Id)mItem.get(fieldKey);
-                    if(lookupId != null){
-                        lookupIds.add(lookupId); 
-                    }                        
-                }
-                
-                
-                //Do SOQL query based on the ID list
-                if(!lookupIds.isEmpty()){
-                    SObject[] lookupObjs = getLookupObjects(lookupIds);                 
-                    for(SObject lookupObj : lookupObjs){
-                        try{                            	
-                            mItem.put(fieldKey + '__Name', lookupObj.get('Name'));                                                                                        
-                        }
-                        catch(Exception e){
-                            System.debug(e.getMessage());
-                            mItem.put(fieldKey + '__Name', 'Undefined'); 
-                        }                        
-                    }
-                }                                    
-            }
-            
-            return mItem; 
-        }
-        
-        return null;
-    } 
-    
-    /**
-    * Create the object based on a json
-    * */
-    @AuraEnabled
-    public static Id createRelatedObject(Id objectId,
-                                         String objectName,
-                                         String jsonData)
-    {
-        if(isSafeObject(objectName)){
-            Map<String, Object> defaultValues = (Map<String, Object>)JSON.deserializeUntyped(jsonData);
-            SObjectType relatedObjectType =  Schema.getGlobalDescribe().get(objectName);    
-            Schema.DescribeSobjectResult relatedDescribe = relatedObjectType.getDescribe();
-            
-            SObject relatedObject = relatedObjectType.newSObject();
-            
-            //Update the fields from default values
-            for(String field : relatedDescribe.fields.getMap().keySet()){    
-                Schema.DescribeFieldResult sfield = relatedDescribe.fields.getMap().get(field).getDescribe();   
-                if(isSafeField(sfield.getName(), objectName)){
-                    if(defaultValues.containsKey(field)){  
-                        String defaultValue = (String)defaultValues.get(field);
-                        
-                        if(sfield.getType() == Schema.DisplayType.DATE){
-                            String dateStr = defaultValue + ' 00:00:00';
-                            relatedObject.put(field, Date.valueOf(dateStr));                                                
-                        }                    
-                        else if(sfield.getType() == Schema.DisplayType.DATETIME){
-                            String datetimeStr = defaultValue.replace('T', ' ').replace('000Z', '');
-                            relatedObject.put(field, Datetime.valueOf(datetimeStr));                                            
-                        }
-                        else if(sfield.getType() == Schema.DisplayType.REFERENCE &&
-                                defaultValue.toUpperCase().startsWith('SELECT')){
-                            System.debug('Set default value for ' + sfield.getName() + ' from ' + defaultValue);                                                                                    
-                            List<SObject> results = Database.query(defaultValue);
-                            if(results != null && results.size() > 0){
-                                relatedObject.put(field, results[0].Id);
-                            }                        
-                        }     
-                        else{
-                            relatedObject.put(field, defaultValues.get(field));                    
-                        }
-                    }                    
-                }
-            }                
-            
-            insert relatedObject;            
-            return relatedObject.Id;
-        }
-        
-        return null;
-    } 
-    
-    /**
     * Return the fieldSet based on the object name and the fieldSet name
     * */
     private static FieldSetUtils.IFieldSet getFieldSet(String objectName, 
@@ -495,34 +556,7 @@ public with sharing class RelatedListDataGridController {
 		return null;        
     }        
     
-    /**
-    * Return the metadata of the fieldSet
-    * */
-    @AuraEnabled
-    public static Object getFieldSetMetadata(String objectName, 
-                                             String fielSetName)
-    {
-        Map<String, Object> mRelatedListMetadata = null;        
-        FieldSetUtils.IFieldSet fieldSet = getFieldSet(objectName, fielSetName);
-        
-        if(fieldSet != null){
-            mRelatedListMetadata = new Map<String, Object>();                
-            //Set the name 
-            mRelatedListMetadata.put('name', fieldSet.getName());                
-            //Set the label
-            mRelatedListMetadata.put('label', fieldSet.getLabel());                
-            //Set the object name 
-            mRelatedListMetadata.put('sobject', objectName);                
-            
-            //Set the columns 
-            Map<String, Object> mColumns = new Map<String, Object>();
-            mRelatedListMetadata.put('columns', getFieldSetColumns(objectName, fieldSet));  
-        }       
-        
-        return mRelatedListMetadata;
-    }  
-    
-    /**
+	/**
     * Clean the fieldSet metadata
 	* -If the field is AutoNumber or Calculated set the type to Formula. Otherwise set the type from the map
 	* -If the column is not an inner field set the type to Reference
@@ -594,81 +628,83 @@ public with sharing class RelatedListDataGridController {
     }
     
     /**
-    * Return the the fieldSet items
-    * */
-    @AuraEnabled
-    public static Object[] getFieldSetItems(String objectName, 
-                                            String fieldSetName,
-                                            String filterBy,
-                                            String sortBy,
-                                            String orderBy)
-    {            
-        FieldSetUtils.IFieldSet fieldSet = getFieldSet(objectName, fieldSetName);
-        
-        if(fieldSet != null) {
-            SObjectType relatedObjectType =  Schema.getGlobalDescribe().get(objectName);    
-            Schema.DescribeSobjectResult relatedDescribe = relatedObjectType.getDescribe();
-            
-            String query = 'Select ';
-            
-            for(FieldSetUtils.IFieldSetMember fieldMember : fieldSet.getFields()) {
-                String fieldName = fieldMember.getFieldPath();                                                            
-                Schema.SObjectField sfield = relatedDescribe.fields.getMap().get(fieldName);
-                
-                if(sfield != null){
-                    DescribeFieldResult fieldDescResult = sfield.getDescribe();                             
-                    if(fieldDescResult.isAccessible()){
-                        if(fieldDescResult.getType() == Schema.DisplayType.REFERENCE){
-                            query += fieldName + ', ' + getLookupNamePath(fieldName) + ', '; 
-                        }
-                        else {
-                            query += fieldName + ', '; 
-                        }
-                    }
-                }                    
-            }
-            
-            query += 'Id From ' + objectName;
-            
-            //Apply filter
-            if(filterBy != null){
-                Map<String, Object> filterMap = 
-                    (Map<String, Object>)JSON.deserializeUntyped(filterBy);
-                
-                List<String> filterList = new List<String>();
-                for(String field : filterMap.keySet()){
-                    filterList.add(field + '=\'' +  filterMap.get(field) + '\'');
-                }
-                
-                if(filterList.size()>0){
-                    query += ' Where ' + String.join(filterList , ' And ');                    
-                }
-            }
-            
-            //Apply sort
-            if(String.isNotBlank(sortBy)){
-                query +=  ' Order By ' + sortBy; 
-                //Apply order
-                if(orderBy != null){
-                    query +=  ' ' + orderBy; 
-                }
-            }              
-            
-            System.debug(query);
-            
-            return Database.query(query);                
-        }
-        
-        return null;
-    }     
-    
-    /**
-    * Return the lookup field name	  
+	* Return the lookup field name	  
 	* */
-    static String getLookupNamePath(String fieldName)
+    private static String getLookupNamePath(String fieldName)
     {
         return fieldName.endsWith('__c') ?
-            fieldName.replace('__c', '__r.Name')  :
+            fieldName.replace('__c', '__r') + '.Name'  :
         fieldName.substring(0,fieldName.length()-2) + '.Name';
-    }         
+    }
+            
+    /**
+    * Return the field Api Name
+	* */
+    private static String getFieldApiName(String fieldApiName)
+    {
+        if(fieldApiName.endsWith('.Name')){
+            String apiName = fieldApiName.replace('.Name', '');
+            if(apiName.endsWith('__r')){
+                return  apiName.replace('__r', '__c');
+            }
+            else{
+                return apiName + 'Id';
+            }            
+        }
+        
+        return fieldApiName;
+    }
+    
+    /**
+    * Check if the object is safe to use
+    * */
+	private static boolean isSafeObject(String objName)
+    {
+	    Map <String, Schema.SObjectType> schemaMap = Schema.getGlobalDescribe();
+	    SObjectType myObj = schemaMap.get(objName);
+	    
+	    return (myObj != null && myObj.getDescribe().isAccessible()); 
+	}
+	
+    /**
+    * Check if the field is safe to use
+    * */
+	private static boolean isSafeField(String fieldName, String objName)
+    {
+	    	Map <String, Schema.SObjectType> schemaMap = Schema.getGlobalDescribe();
+	    	SObjectType myObj = schemaMap.get(objName);
+	    	
+	        SObjectField myField = myObj.getDescribe().fields.getMap().get(fieldName);
+	        return (myField != null && myField.getDescribe().isAccessible());	    
+	}
+    
+    /**
+    * Return the the related list items
+    * */
+    @AuraEnabled
+    public static Object[] getReleatedListItems(Id objectId, 
+                                                String relatedlistName)
+    {            
+        //@deprecated
+        return null;
+    } 
+    
+    /**
+    * Return the object details
+    * */    
+    @AuraEnabled
+    public static Object getObject(Id objectId)
+    {    
+        //@deprecated
+        return null;
+    }
+    
+    /**
+	* Return the list of objects based on the lookup ids
+	* */
+    private static SObject[] getLookupObjects(Set<Id> lookupIds)
+    {
+        //@deprecated        
+        return null;                   
+    }
 }

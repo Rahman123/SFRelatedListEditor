@@ -74,13 +74,10 @@
                                     var="item" 
                                     indexVar="itemRank">                  
                         <c:DataGridRowComponent aura:id="row"
-                                                displayMode="{!v.displayMode}"
-                                                columns="{!v.columns}"                                                 
                                                 item="{!item}" 
-                                                itemRank="{!itemRank}"
-                                                onDelete="{!c.actionDelete}"
-                                                onEdit="{!c.actionEdit}"
-                                                />                                
+                                                columns="{!v.columns}"
+                                                displayMode="{!v.displayMode}"
+                                                onDelete="{!c.actionDelete}"/>                                
                     </aura:iteration>   
                     <tr aura:id="total" class="total hidden">
                         <aura:iteration items="{!v.aggregations}" 

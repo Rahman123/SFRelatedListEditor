@@ -33,10 +33,19 @@
     },
     loadItems : function(component, onSuccess, onError){
         //Load items from Salesforce
-        var dataAction = component.get("c.getReleatedListItems");
+        var dataAction = component.get("c.getReleatedItems");
+        var relatedFields = component.get("v.columns")
+        .filter(col => {return col.fieldApiName != null})
+        .map(col => {return col.fieldApiName});
+        
         dataAction.setParams({
             "objectId": component.get("v.recordId"),
-            "relatedlistName": component.get("v.relatedListName")
+            "relatedObjName": component.get("v.relatedObjectName"),
+            "refFieldName": component.get("v.refFieldName"),
+            "relatedFields": relatedFields,
+            "filterBy": component.get("v.filter"),
+            "sortBy": component.get("v.sort"),
+            "orderBy": component.get("v.order")
         });	
         
         dataAction.setCallback(this, function(res) {                                    
@@ -105,14 +114,17 @@
         
         //Update the items from cells
         cellComponents.forEach(function(cellCmp){
+            var itemId = cellCmp.get("v.item").Id;                        
+            var item = items.filter(function(elt){
+                return elt.Id == itemId;
+            }).pop();
+            
             var column = cellCmp.get("v.column");
-            var item = items[cellCmp.get("v.itemRank")];
             
-            item[column.name] = cellCmp.get("v.value");  
-            
+            item[column.name] = cellCmp.get("v.value");              
             if(column.type=='Reference'){
                 item[column.name + '__Name'] = cellCmp.get("v.refLabel");
-            }
+            }            
         });
         
         return items;
@@ -153,47 +165,7 @@
         var columns = component.get("v.columns");
         var aggregations = Array(columns.length).fill("");     	
         
-        var json_filter = component.get("v.filter");                
         if(items && items.length > 0){
-            //Apply Filters
-            if (json_filter != null){
-                var obj_filter = JSON.parse(json_filter); 
-                var fn_filter = function(elt){
-                    for (var field in obj_filter) {
-                        if (obj_filter.hasOwnProperty(field)) {
-                            if(obj_filter[field] != elt[field]){
-                                return false;
-                            }
-                        }
-                    }                       
-                    
-                    return true;
-                }
-                
-                items = items.filter(fn_filter);                    
-            }
-            
-            //Apply Sort Criteria
-            var sort_field = component.get("v.sort");
-            var sort_order = component.get("v.order");
-            var order_coef = (sort_order == "desc")?-1:1;
-            
-            if(sort_field != null && !noSort){
-                items.sort(function(a, b){
-                    if (a.hasOwnProperty(sort_field)) {
-                        if (a[sort_field] < b[sort_field]){
-                            return -1*order_coef;
-                        }
-                        if (a[sort_field] > b[sort_field]){
-                            return 1*order_coef;
-                        }
-                        if (a[sort_field] == b[sort_field]){
-                            return 0;
-                        }
-                    }
-                }); 
-            }
-            
             //Apply Aggregate
             var json_aggregate = component.get("v.aggregate");                
             
@@ -230,11 +202,11 @@
             items = [];
         }
         
-        //Update the UI
-        component.set("v.items", JSON.parse(JSON.stringify(items)));                 
+        //Update the UI     
+        component.set("v.items", items);                   
         component.set("v.aggregations", aggregations); 
     },
-    notifyItemDeleted : function(component, item){
+    notifyItemDeleted : function(component, item){        
         var newItems = component.get("v.items");
         newItems = newItems.filter(function(elt){
             return item.Id !=  elt.Id;
@@ -242,46 +214,29 @@
         
         this.cleanItems(component, newItems);
     },
-    notifyItemUpdated : function(component, item){
-        //Load the new version from Salesforce
-        var getObjectAction = component.get("c.getObject");
-        getObjectAction.setParams({
-            "objectId": item.Id
-        });	
-        
-        getObjectAction.setCallback(this, function(res) {                                    
-            if (res.getState() === "SUCCESS") {                 
-                var newItem = res.getReturnValue();   
-                var newItems = component.get("v.items");
-                
-                newItems = newItems.map(function(elt){
-                    if(elt.Id == newItem.Id){
-                        return newItem;
-                    }
-                    return elt;
-                });
-                
-                //Clean the items list
-                this.cleanItems(component, newItems);                
-            }
-            else if (res.getState() === "ERROR") {
-                $A.log("Errors", res.getError());
-            }
-        });   
-        
-        $A.enqueueAction(getObjectAction);    		        
-    },
     notifyItemCreated : function(component, recordId){
-        //Load the new item from Salesforce
-        var getObjectAction = component.get("c.getObject");
-        getObjectAction.setParams({
-            "objectId": recordId
-        });	
+        var dataAction = component.get("c.getReleatedItems");
+        var relatedFields = component.get("v.columns")
+        .filter(col => {return col.fieldApiName != null})
+        .map(col => {return col.fieldApiName});
         
-        getObjectAction.setCallback(this, function(res) {                                    
+        var recordFilter = JSON.stringify({Id : recordId});
+        
+        dataAction.setParams({
+            "objectId": component.get("v.recordId"),
+            "relatedObjName": component.get("v.relatedObjectName"),
+            "refFieldName": component.get("v.refFieldName"),
+            "relatedFields": relatedFields,
+            "filterBy": recordFilter,
+            "sortBy": null,
+            "orderBy": null
+        });	               
+        
+        
+        dataAction.setCallback(this, function(res) {                                    
             if (res.getState() === "SUCCESS") {                 
                 var newItems = component.get("v.items");
-                newItems.push(res.getReturnValue());
+                newItems.push(res.getReturnValue()[0]);
                 
                 //Clean the items list
                 this.cleanItems(component, newItems, true);                
@@ -291,7 +246,7 @@
             }
         });   
         
-        $A.enqueueAction(getObjectAction);    		        
+        $A.enqueueAction(dataAction);    		        
     },
     viewAllUrl : function(itemId, relatedList) {
         if(window.location.href.indexOf('one.app') == -1){

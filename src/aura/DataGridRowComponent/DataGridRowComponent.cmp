@@ -5,7 +5,6 @@
     <aura:attribute name="columns" type="Object[]"/>
     
     <aura:attribute name="item" type="Object"/>
-    <aura:attribute name="itemRank" type="Integer"/>
     
     <aura:handler name="init" value="{!this}" action="{!c.doInit}" />    
     <aura:registerEvent name="onDelete" type="c:DataGridRelatedRecordEvent"/>
@@ -19,7 +18,6 @@
                                        iconSize="x-small"
                                        onselect="{!c.handleMenuSelect}">
                      <lightning:menuItem label="Delete" value="delete" />
-                     <!--lightning:menuItem label="Edit" value="edit"/-->                
                  </lightning:buttonMenu>
              </td>
         </aura:if>

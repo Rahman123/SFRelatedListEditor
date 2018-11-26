@@ -12,7 +12,7 @@
     <aura:handler name="init" value="{!this}" action="{!c.doInit}" /> 
     
     <aura:if isTrue="{!v.displayMode == 'read'}">
-        <a href="javascript:void(0);" onclick="{!c.navigateToObject}">{!v.refLabel}</a>
+        <a href="{! '/' + v.value }">{!v.refLabel}</a>
         
         <aura:set attribute="else">
             <div class="slds-form-element slds-lookup slds-is-open" data-select="single">

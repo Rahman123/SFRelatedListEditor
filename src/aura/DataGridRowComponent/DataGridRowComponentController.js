@@ -1,7 +1,6 @@
 ({
     doInit : function(component, event, helper) {
         var item = component.get("v.item");        
-        var itemRank = component.get("v.itemRank");
         
         var columns = component.get("v.columns");
         var displayMode = component.get("v.displayMode");
@@ -56,7 +55,6 @@
             return [getCellComponent(column, index),{                
                 "aura:id" : "cellWrapper",
                 "item" : item,
-                "itemRank" : itemRank,                
                 "displayMode" : displayMode,                
                 "columnRank" : index,
                 "column" : column				
