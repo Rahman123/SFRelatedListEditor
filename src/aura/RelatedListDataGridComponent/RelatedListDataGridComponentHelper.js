@@ -85,8 +85,8 @@
         if(rows){
             //Only 1 row
             if(!Array.isArray(rows)){
-            	rows = [rows]
-        	}
+                rows = [rows]
+            }
             
             rows.forEach(function(row){
                 row.get("v.body").forEach(function(cell){
@@ -255,5 +255,5 @@
         else{
             return "/one/one.app#/sObject/" + itemId + "/rlName/" + relatedList + "/view";;
         }
-    }
-})
+    }     
+ })

@@ -14,11 +14,9 @@
         {!v.body}
          <aura:if isTrue="{!v.displayMode != 'read'}">
              <td class="actions">
-                 <lightning:buttonMenu alternativeText="Actions" 
-                                       iconSize="x-small"
-                                       onselect="{!c.handleMenuSelect}">
-                     <lightning:menuItem label="Delete" value="delete" />
-                 </lightning:buttonMenu>
+                 <lightning:buttonIcon iconName="utility:delete"  
+                                       alternativeText="Delete" 
+                                       onclick="{!c.handleDelete}"/>               
              </td>
         </aura:if>
     </tr>            

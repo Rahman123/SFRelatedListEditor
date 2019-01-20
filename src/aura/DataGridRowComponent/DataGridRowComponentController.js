@@ -100,5 +100,13 @@
             
             updateEvt.fire();
         }            
-    }                      
+    },
+    handleDelete: function(component, event, helper) {
+        var deleteEvt = component.getEvent("onDelete");                
+        deleteEvt.setParams({
+            item: component.get('v.item')
+        });
+        
+        deleteEvt.fire();          
+    }   
 })

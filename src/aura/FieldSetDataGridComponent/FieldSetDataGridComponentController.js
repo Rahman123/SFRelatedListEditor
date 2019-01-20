@@ -178,5 +178,53 @@
         deleteDialog.set('v.context', item);
         
         deleteDialog.set('v.showDialog', true);        
+    },
+    calculateColWidth: function(component, event, helper) {        
+        var childObj = event.target
+        var mouseStart=event.clientX;
+        
+        component.set("v.curElement", childObj);
+        component.set("v.mouseStart", mouseStart);
+        
+        // Stop text selection event so mouse move event works perfectlly.
+        if(event.stopPropagation) event.stopPropagation();
+        if(event.preventDefault) event.preventDefault();
+        event.cancelBubble=true;
+        event.returnValue=false;
+    },    
+    setNewColWidth: function(component, event, helper) {
+        var curElement = component.get("v.curElement");
+        if( curElement != null && curElement.tagName ) {
+            var parObj = curElement;
+            
+            while(parObj.parentNode.tagName != 'TH') {
+                if( parObj.className == 'slds-resizable__handle')
+                    curElement = parObj;    
+                parObj = parObj.parentNode;               
+            }
+                                    
+            var mouseStart = component.get("v.mouseStart");
+            var oldWidth = parObj.offsetWidth;
+            var newWidth = oldWidth + (event.clientX - parseFloat(mouseStart));            
+            
+            component.set("v.newColWidth", newWidth);
+            curElement.style.right = (oldWidth - newWidth) +'px';
+            component.set("v.curElement", curElement);
+        }
+    },
+    resetColWidth: function(component, event, helper) {
+        if( component.get("v.curElement") !== null ) {
+            var newColWidth = component.get("v.newColWidth"); 
+            var curElement = component.get("v.curElement");
+                        
+            var divElement = curElement.parentNode.parentNode; // Get the DIV
+            var parObj = divElement.parentNode; // Get the TH Element           
+                              
+            divElement.style.width = newColWidth+'px';
+            parObj.style.width = newColWidth+'px';
+            
+            curElement.style.right = 0;             
+            component.set("v.curElement", null);
+        }
     }
 })

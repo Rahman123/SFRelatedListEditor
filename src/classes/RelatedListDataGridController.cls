@@ -394,7 +394,7 @@ public with sharing class RelatedListDataGridController {
                             query += fieldName + ', ' + getLookupNamePath(fieldName) + ', '; 
                             lookupFields.put(fieldName, fieldDescResult);
                         }
-                        if(fieldDescResult.getType() == Schema.DisplayType.PERCENT){
+                        else if(fieldDescResult.getType() == Schema.DisplayType.PERCENT){
                             query += fieldName + ', '; 
                             percentFields.put(fieldName, fieldDescResult);
                         }
@@ -430,6 +430,9 @@ public with sharing class RelatedListDataGridController {
                     query +=  ' ' + orderBy; 
                 }
             }              
+            
+            //Debug
+            System.debug(query);
             
             //Execute the query
             SObject[] items = Database.query(query);  

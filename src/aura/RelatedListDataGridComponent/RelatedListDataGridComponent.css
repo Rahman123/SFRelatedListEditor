@@ -22,3 +22,16 @@
     background: #0070d2;;
     color: white;
 }
+
+.THIS .slds-card__body{
+    max-width: 100%;
+    overflow: auto;
+}
+
+.THIS .slds-table--cell-buffer tr>th:last-child{
+    padding-right: 0px;
+} 
+
+.THIS .slds-table--cell-buffer tr>td:last-chil{
+    padding-right: 0px;
+}

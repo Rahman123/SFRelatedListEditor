@@ -26,6 +26,10 @@
     <aura:attribute name="viewAllLink" type="String"/>    
     <aura:attribute name="displayLabel" type="String"/>    
     
+    <aura:attribute name="mouseStart" type="string" />
+    <aura:attribute name="newColWidth" type="string" />
+    <aura:attribute name="curElement" type="Object" />
+    
     <aura:handler name="init" value="{!this}" action="{!c.doInit}" />  
     <aura:handler event="force:refreshView" action="{!c.reloadItems}"/>
     
@@ -58,24 +62,32 @@
                 </aura:if>
             </div>
         </div>
-        <div class="slds-card__body">
-            <table class="slds-table slds-table--bordered slds-no-row-hover slds-table--cell-buffer">
+        <div class="slds-card__body">            
+            <table class="slds-table slds-table--bordered slds-no-row-hover 
+                          slds-table--cell-buffer slds-table_resizable-cols" 
+                   style="table-layout:auto"
+                   onmouseup="{!c.resetColWidth}">
                 <thead>
                     <tr class="slds-text-title--caps">
                         <aura:iteration items="{!v.columns}" var="column">
-                            <th scope="col">
-                                <div class="slds-truncate" 
-                                     title="{!column.label}">
-                                    {!column.label}
+                            <th scope="col" class="slds-is-resizable slds-is-sortable">
+                                <div onmousemove="{!c.setNewColWidth}">                                    
+                                    <a href="javascript:void(0);" role="button" class="slds-th__action slds-text-link_reset">
+                                        <span class="slds-truncate" title="{!column.label}"> {!column.label}</span>
+                                    </a>                                   
+                                    <div class="slds-resizable">
+                                        <input type="range" min="20" max="1000" class="slds-resizable__input slds-assistive-text" id="cell-resize-handle-assignment" tabindex="-1" />
+                                        <span class="slds-resizable__handle" onmousedown="{!c.calculateColWidth}"/>
+                                    </div>
                                 </div>
                             </th>
                         </aura:iteration>                           
                     </tr>
                 </thead>
-                <tbody>
-                    <aura:iteration items="{!v.items}" 
-                                    var="item" 
-                                    indexVar="itemRank">                  
+                <tbody onmousemove="{!c.resetColWidth}">
+                    <aura:iteration items="{!v.items}"                                         
+                                    indexVar="itemRank"
+                                    var="item">                  
                         <c:DataGridRowComponent aura:id="row"
                                                 item="{!item}" 
                                                 columns="{!v.columns}"  
@@ -91,6 +103,8 @@
                 </tbody>
             </table>
         </div>
+        
+        
         <div aura:id="gridActions" class="forceRecordEditActions hidden">
             <div class="slds-align_absolute-center">
                 <button type="button" 
