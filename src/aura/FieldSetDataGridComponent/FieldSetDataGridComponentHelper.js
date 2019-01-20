@@ -58,6 +58,8 @@
         this.toogleTotal(component, event);
     },    
     loadItems : function(component, onSuccess, onError){
+        component.set("v.isWorking", true);
+        
         //Load items from Salesforce
         var dataAction = component.get("c.getFieldSetItems");
         dataAction.setParams({
@@ -87,6 +89,8 @@
                     onError(res);
                 }
             }
+            
+            component.set("v.isWorking", false);
         });   
         
         $A.enqueueAction(dataAction);    
@@ -132,6 +136,8 @@
         return items;
     },
     saveItems : function(component, items, onSuccess, onError){
+        component.set("v.isWorking", true);
+        
         //Save items on Salesforce
         var saveItemsAction = component.get("c.saveRelatedListItems");
         
@@ -145,7 +151,9 @@
             }
             else{
                 onError(res);                  
-            }             
+            } 
+
+            component.set("v.isWorking", false);            
         });   
         
         $A.enqueueAction(saveItemsAction);
@@ -209,7 +217,9 @@
         
         this.cleanItems(component, newItems);
     },
-    notifyItemCreated : function(component, recordId){        
+    notifyItemCreated : function(component, recordId){ 
+        component.set("v.isWorking", true);
+        
         var dataAction = component.get("c.getReleatedItems");       
         var recordFilter = JSON.stringify({Id : recordId});
         
@@ -232,6 +242,8 @@
             else if (res.getState() === "ERROR") {
                 $A.log("Errors", res.getError());
             }
+            
+            component.set("v.isWorking", false);
         });   
         
         $A.enqueueAction(dataAction);       		        

@@ -39,3 +39,8 @@
 .THIS .slds-table--cell-buffer tr>td:last-chil{
     padding-right: 0px;
 }
+
+.THIS .link-disabled {
+    pointer-events: none;
+    cursor: not-allowed;
+}

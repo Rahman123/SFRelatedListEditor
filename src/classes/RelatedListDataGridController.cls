@@ -584,7 +584,7 @@ public with sharing class RelatedListDataGridController {
                 if(fieldDescResult.isAccessible()){                    
                     Map<String, Object> mColumn = new Map<String, Object>();
                     
-                    mColumn.put('name', fieldName);
+                    mColumn.put('name', fieldDescResult.getName());
                     mColumn.put('label', fieldDescResult.getLabel());
                     
                     //Set requied flag

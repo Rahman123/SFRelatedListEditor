@@ -25,10 +25,10 @@
     <aura:attribute name="newColWidth" type="string" />
     <aura:attribute name="curElement" type="Object" />
     
+    <aura:attribute name="isWorking" type="Boolean" />
+    
     <aura:handler name="init" value="{!this}" action="{!c.doInit}" />  
     <aura:handler event="force:refreshView" action="{!c.reloadItems}"/>
-    
-    
     
     <article aura:id="gridContainer" class="slds-card">
         <div class="slds-card__header slds-grid">
@@ -69,7 +69,16 @@
                         <aura:iteration items="{!v.columns}" var="column">
                             <th scope="col" class="slds-is-resizable">
                                 <div onmousemove="{!c.setNewColWidth}">                                    
-                                    <a href="javascript:void(0);" role="button" class="slds-th__action slds-text-link_reset">
+                                    <a role="button" 
+                                       name="{!column.name}"
+                                       onclick="{!c.handleSort}"
+                                       class="{!'slds-th__action slds-text-link_reset ' +
+                                              if(v.displayMode != 'read', 'link-disabled', '')}">
+                                        <aura:if isTrue="{!v.sort == column.name}">
+                                            <lightning:icon size="xx-small"
+                                                            iconName="{!'utility:' + 
+                                                                      if(v.order == 'desc', 'arrowdown', 'arrowup')}"/>
+                                        </aura:if>
                                         <span class="slds-truncate" title="{!column.label}"> {!column.label}</span>
                                     </a>                                   
                                     <div class="slds-resizable">
@@ -114,6 +123,11 @@
                 </button>
             </div>
         </div> 
+        <aura:if isTrue="{! v.isWorking }">
+            <lightning:spinner alternativeText="Processing"                            
+                               style="background: transparent;"
+                               variant="brand"/>
+        </aura:if>
     </article>  
     
     <c:DataGridDialogComponent aura:id="deleteDialog" type="CONFIRM" onClose="{!c.deleteCallback}" />           

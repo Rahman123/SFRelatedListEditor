@@ -30,6 +30,8 @@
     <aura:attribute name="newColWidth" type="string" />
     <aura:attribute name="curElement" type="Object" />
     
+    <aura:attribute name="isWorking" type="Boolean" />
+    
     <aura:handler name="init" value="{!this}" action="{!c.doInit}" />  
     <aura:handler event="force:refreshView" action="{!c.reloadItems}"/>
     
@@ -72,9 +74,18 @@
                         <aura:iteration items="{!v.columns}" var="column">
                             <th scope="col" class="slds-is-resizable slds-is-sortable">
                                 <div onmousemove="{!c.setNewColWidth}">                                    
-                                    <a href="javascript:void(0);" role="button" class="slds-th__action slds-text-link_reset">
+                                    <a role="button" 
+                                       name="{!column.name}"
+                                       onclick="{!c.handleSort}" 
+                                       class="{!'slds-th__action slds-text-link_reset ' +
+                                              if(v.displayMode != 'read', 'link-disabled', '')}">
+                                        <aura:if isTrue="{!v.sort == column.name}">
+                                            <lightning:icon size="xx-small"
+                                                            iconName="{!'utility:' + 
+                                                                      if(v.order == 'desc', 'arrowdown', 'arrowup')}"/>
+                                        </aura:if>
                                         <span class="slds-truncate" title="{!column.label}"> {!column.label}</span>
-                                    </a>                                   
+                                    </a>                                         
                                     <div class="slds-resizable">
                                         <input type="range" min="20" max="1000" class="slds-resizable__input slds-assistive-text" id="cell-resize-handle-assignment" tabindex="-1" />
                                         <span class="slds-resizable__handle" onmousedown="{!c.calculateColWidth}"/>
@@ -125,7 +136,11 @@
                 <ui:outputURL value="{!v.viewAllLink}" label="View All"/>              
             </div>
         </div>                 
-        
+        <aura:if isTrue="{! v.isWorking }">
+            <lightning:spinner alternativeText="Processing"                            
+                               style="background: transparent;"
+                               variant="brand"/>
+        </aura:if>
     </article>  
     
     <c:DataGridDialogComponent aura:id="deleteDialog" type="CONFIRM" onClose="{!c.deleteCallback}" />           

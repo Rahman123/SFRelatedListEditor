@@ -23,12 +23,27 @@ public class RelatedListDataGridControllerTest {
         Test.stopTest();         
     }
     
-    static testMethod void testGetReleatedListItems()
+    static testMethod void testGetReleatedItems()
     {
+        Sobject acc = getNewSobject('Account');
+        acc.put('Name', 'Test Account');
+        insert acc;
+
+        Sobject contact = getNewSobject('Contact');
+        contact.put('AccountId', acc.get('Id'));
+        contact.put('FirstName', 'Test');
+        contact.put('LastName', 'Test');        
+        insert contact;
+        
         Test.startTest();
         Test.setMock(HttpCalloutMock.class, new RestAPIMockHttpResponseGenerator());                              
-        Object[] contacts = RelatedListDataGridController.getReleatedListItems('0010Y000003iFovQAE', 
-                                                                               'Contacts');        
+        Object[] contacts = RelatedListDataGridController.getReleatedItems(acc.Id,
+                                                                           'Contact',
+                                                                           'AccountId',
+                                                                           new List<String>{'Name'},
+                                                                           null,
+                                                                           null,
+                                                                           null);        
 		System.assertEquals(true, contacts.size()>0);         
         
         Test.stopTest();
@@ -40,22 +55,31 @@ public class RelatedListDataGridControllerTest {
         Test.startTest();
         Test.setMock(HttpCalloutMock.class, new RestAPIMockHttpResponseGenerator());        
         
-        Object[] contacts = RelatedListDataGridController.getReleatedListItems('0010Y000003iFovQAE', 
-                                                                               'Contacts');                
-		Sobject acc = getNewSobject('Account');
+        Sobject acc = getNewSobject('Account');
         acc.put('Name', 'Test Account');
         insert acc;
 
+        Sobject acc2 = getNewSobject('Account');
+        acc2.put('Name', 'Test Account');
+        insert acc2;
+        
         Sobject contact = getNewSobject('Contact');
         contact.put('AccountId', acc.get('Id'));
         contact.put('FirstName', 'Test');
         contact.put('LastName', 'Test');        
         insert contact;
-
+        
+        Object[] contacts = RelatedListDataGridController.getReleatedItems(acc.Id,
+                                                                           'Contact',
+                                                                           'AccountId',
+                                                                           new List<String>{'FirstName'},
+                                                                           null,
+                                                                           null,
+                                                                           null);                
+		
         Map<String, Object> mContact = (Map<String, Object>)contacts.get(0);        
-        mContact.put('AccountId', contact.get('AccountId'));
-        mContact.put('Id', contact.get('Id'));        
-        mContact.remove('OwnerId');
+        mContact.put('AccountId', acc2.Id);                
+        contact.put('FirstName', 'Test2');
         
 		Boolean result = RelatedListDataGridController.saveRelatedListItems(System.JSON.serialize(contacts));
         System.assertEquals(true, result);
@@ -75,20 +99,7 @@ public class RelatedListDataGridControllerTest {
         Sobject s = st.newSobject();        
         return s;
     }    
-   
-    static testMethod void testGetObject()
-    {
-        Test.startTest();        
-        Sobject acc = getNewSobject('Account');
-        acc.put('Name', 'Test Account');
-        insert acc;
-        
-        Object jsonObj = RelatedListDataGridController.getObject(acc.Id);        
-        System.assertEquals(true, jsonObj != null);        
-        
-        Test.stopTest();            
-    }
-    
+       
     static testMethod void testDelectObject()
     {
         Test.startTest();

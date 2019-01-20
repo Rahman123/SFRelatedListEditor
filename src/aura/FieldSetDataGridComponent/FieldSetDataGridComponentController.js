@@ -226,5 +226,22 @@
             curElement.style.right = 0;             
             component.set("v.curElement", null);
         }
+    },
+    handleSort: function(component, event, helper) {
+        var selectedCol = event.currentTarget.name;        
+        var currentCol = component.get("v.sort");
+        var currentOrd = component.get("v.order");
+        
+        //If we sort the same column
+        //=>toggle the order
+        if(currentCol === selectedCol){
+            component.set("v.order", (currentOrd=="desc")?"asc":"desc");        
+        }
+        else{
+            component.set("v.sort", selectedCol);
+            component.set("v.order", "desc");
+        }
+        //Load the items again from the back
+        helper.loadItems(component);
     }
 })

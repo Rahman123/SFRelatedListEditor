@@ -114,4 +114,4 @@
     customInit : function(component, event){
         //Virtual function
     }    
-}
+})
