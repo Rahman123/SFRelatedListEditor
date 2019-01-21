@@ -37,7 +37,9 @@ public with sharing class RelatedListDataGridController {
                                                                               recordTypeName);
         
         for(Object relatedListMetadata : relatedListsMetatdata){
-            cleanRelatedListMetadata((Map<String, Object>)relatedListMetadata); 
+            Map<String, Object> mRelatedListMetadata = (Map<String, Object>)relatedListMetadata;
+            cleanRelatedListMetadata(mRelatedListMetadata); 
+            decorateRelatedListMetadata(mRelatedListMetadata);           
         }
         
         return relatedListsMetatdata;
@@ -61,6 +63,8 @@ public with sharing class RelatedListDataGridController {
             Map<String, Object> mRelatedListMetadata = (Map<String, Object>)relatedListMetadata;
             if(mRelatedListMetadata.get('label') == relatedListLabel){
                 cleanRelatedListMetadata(mRelatedListMetadata); 
+                decorateRelatedListMetadata(mRelatedListMetadata);
+
                 return mRelatedListMetadata;
             }
         }           
@@ -203,7 +207,7 @@ public with sharing class RelatedListDataGridController {
             //Update the fields
             for(String field : mObj.keySet()){
                 Schema.SObjectField sfield = objType.getDescribe().fields.getMap().get(field);
-                if(sfield != null && sfield.getDescribe().isUpdateable()){
+                if(sfield != null && sfield.getDescribe().isUpdateable()){                    
                     if(sfield.getDescribe().getType() == Schema.DisplayType.DATE){
                         if(mObj.get(field) != null){
                             String dateStr = ((String)mObj.get(field)) + ' 00:00:00';
@@ -220,7 +224,7 @@ public with sharing class RelatedListDataGridController {
                         if(mObj.get(field) != null){                            
                             sObj.put(field, (decimal)mObj.get(field)*100);                    
                         }
-                    }
+                    }                    
                     else if(sfield.getDescribe().getType() == Schema.DisplayType.PICKLIST){
                         Schema.DescribeFieldResult fieldDescribe = sfield.getDescribe();
                         List<Schema.PicklistEntry> entries = fieldDescribe.getPicklistValues();
@@ -265,7 +269,53 @@ public with sharing class RelatedListDataGridController {
 		
 		return null;
 	}
-	    	    
+	    
+    /**
+     * Search Candiate for Lookup Field using UI-API
+     * - refObjName : Object Name
+     * - refFieldName : Field Name
+     * - lookupFilters : Lookup Filters
+     * - searchTerm : Search Term
+     * */
+    @AuraEnabled
+    public static Object[] getLookupSuggestions(Id objectId, 
+                                                String refObjName, 
+                                                String refFieldName, 
+                                                String lookupFilters, 
+                                                String searchTerm) 
+    {
+        String query = 'Select ';
+        String dependentFieldBindings = '';
+        String objectName = objectId.getSobjectType().getDescribe().getName();
+        
+        if(lookupFilters != null && isSafeObject(objectName)){
+            List<String> lookupFilterList = lookupFilters.split(',');
+            For(String fieldName : lookupFilterList){
+                if(isSafeField(fieldName, objectName)){
+                    query += fieldName + ',';
+                }
+            }
+            
+            query += 'Id From ' + objectName + ' Where Id=:objectId';
+            Sobject refObj = Database.query(query);
+            
+            For(String fieldName : lookupFilterList){
+                if(refObj.get(fieldName) != null){
+                    dependentFieldBindings += ',' + fieldName;
+                    dependentFieldBindings += '=' + refObj.get(fieldName);
+                }
+            }               
+            
+            dependentFieldBindings = dependentFieldBindings.replaceFirst(',', '');
+        }
+        
+        return RestAPIUtils.getLookupFieldSuggestions(objectName,
+                                                      refObjName,
+                                                      refFieldName,
+                                                      dependentFieldBindings,
+                                                      searchTerm);		
+	}
+    
     /**
     * Delete a related record
     * */
@@ -543,6 +593,25 @@ public with sharing class RelatedListDataGridController {
                 mColumn.put('type', 'Reference');                    
             }
         }
+    }
+    
+    /**
+    * Decorate the related list metadata
+	* -Add the filteredLookupInfo for reference fields	  
+	* */
+    private static void decorateRelatedListMetadata(Map<String, Object> mRelatedListMetadata)
+    {                        
+        String relatedObjectName = (String)mRelatedListMetadata.get('sobject');        
+        Map<String, Object> lookupFiltersMetadata = RestAPIUtils.getLookupFiltersMetadata(relatedObjectName);
+        
+        Object[] columns = (Object[] )mRelatedListMetadata.get('columns');
+        for(Integer i=0; i<columns.size(); i++){            
+            Map<String, Object> mColumn = (Map<String, Object>) columns.get(i); 
+            String columnName = (String)mColumn.get('name');
+            if(lookupFiltersMetadata.containsKey(columnName)){                
+                mColumn.put('filteredLookupInfo', lookupFiltersMetadata.get(columnName));
+            }
+        }        
     }
     
     /**

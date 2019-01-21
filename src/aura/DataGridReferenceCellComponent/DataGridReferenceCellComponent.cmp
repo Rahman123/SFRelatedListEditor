@@ -2,6 +2,9 @@
     <aura:attribute name="refValue" type="String"/>
     <aura:attribute name="refLabel" type="String"/>
     <aura:attribute name="refObjName" type="String" /> 
+    <aura:attribute name="refFieldName" type="String" /> 
+    <aura:attribute name="filteredLookupInfo" type="String" /> 
+    <aura:attribute name="objectId" type="String" /> 
     
     <aura:attribute name="isSearching" type="Boolean" /> 
     <aura:attribute name="searchTerm" type="String" />     

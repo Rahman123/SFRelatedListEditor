@@ -4,10 +4,11 @@ public class RelatedListDataGridControllerTest {
     {
 		Test.startTest();                
         Test.setMock(HttpCalloutMock.class, new RestAPIMockHttpResponseGenerator());  
-        Object[] relatedListsMatadata = RelatedListDataGridController.getReleatedListsMetadata('0010Y000003iFovQAE');
-		System.assertEquals(true, relatedListsMatadata.size() > 0);        
-        
+        Object[] relatedListsMatadata = RelatedListDataGridController.getReleatedListsMetadata('0010Y000003iFovQAE');        
         Test.stopTest();        
+        
+        System.assertEquals(true, relatedListsMatadata.size() > 0);        
+
     }
     
     
@@ -18,9 +19,10 @@ public class RelatedListDataGridControllerTest {
              
         Object relatedListsMatadata = RelatedListDataGridController.getReleatedListMetadata('0010Y000003iFovQAE',
                                                                                             'Contacts');
-		System.assertEquals(true, relatedListsMatadata != null);        
-        
         Test.stopTest();         
+        
+        System.assertEquals(true, relatedListsMatadata != null);        
+
     }
     
     static testMethod void testGetReleatedItems()
@@ -43,10 +45,11 @@ public class RelatedListDataGridControllerTest {
                                                                            new List<String>{'Name'},
                                                                            null,
                                                                            null,
-                                                                           null);        
-		System.assertEquals(true, contacts.size()>0);         
-        
+                                                                           null);                
         Test.stopTest();
+        
+        System.assertEquals(true, contacts.size()>0);         
+        
     } 
     
    
@@ -82,12 +85,9 @@ public class RelatedListDataGridControllerTest {
         contact.put('FirstName', 'Test2');
         
 		Boolean result = RelatedListDataGridController.saveRelatedListItems(System.JSON.serialize(contacts));
-        System.assertEquals(true, result);
-        
-        Object[] candidates = RelatedListDataGridController.getLookupCandidates('Account', 'Test');
-        System.assertEquals(true, candidates.size() > 0);
-        
         Test.stopTest();        
+        
+        System.assertEquals(true, result);
     }
     
     public static SObject getNewSobject(String typeName) {
@@ -110,9 +110,9 @@ public class RelatedListDataGridControllerTest {
         insert contact;              
         
         boolean result = RelatedListDataGridController.deleteRelatedRecord(contact.Id);
-        System.assertEquals(true, result);
-        
         Test.stopTest();
+        
+        System.assertEquals(true, result);
     }       
     
     static testMethod void testCreateRelatedObject()
@@ -132,9 +132,9 @@ public class RelatedListDataGridControllerTest {
         Id IdContact = RelatedListDataGridController.createRelatedObject(acc.Id, 
                                                                          'Contact', 
                                                                          JSON.serialize(data));
-        System.assertEquals(true, IdContact != null);
-        
         Test.stopTest();
+        
+        System.assertEquals(true, IdContact != null);
     }
     
     static testMethod void testGetFieldSetMetadata()
@@ -149,9 +149,10 @@ public class RelatedListDataGridControllerTest {
             (Map<String, Object>)RelatedListDataGridController.getFieldSetMetadata('Opportunity', 
                                                                                    'OneDesk__Opportunity_FieldSet');
         
-        System.assert(mRelatedListMetadata != null);
-        
+                
         Test.stopTest();
+        
+        System.assert(mRelatedListMetadata != null);
     }
     
     static testMethod void testGetFieldSetItems()
@@ -169,19 +170,63 @@ public class RelatedListDataGridControllerTest {
         opp.put('AccountId', acc.Id);
         insert opp;        
 
-        FieldSetUtils.setMock( new List<SObjectField> { Opportunity.Amount, Opportunity.Name }, 
+        FieldSetUtils.setMock( new List<SObjectField> { Opportunity.Amount, Opportunity.Name, Opportunity.StageName, Opportunity.AccountId }, 
                               'Opportunity_FieldSet', 
                               'Opportunity FieldSet');
         
         List<Object> opportunityList = 
             RelatedListDataGridController.getFieldSetItems('Opportunity', 
                                                            'OneDesk__Opportunity_FieldSet',
-                                                           null,
-                                                           null,
-                                                           null);
+                                                           '{"StageName":"Sourcing Demand"}',
+                                                           'Amount',
+                                                           'desc');
+                        
+        Test.stopTest();
         
         System.assert(opportunityList != null);
-        
-        Test.stopTest();
     }
+    
+    static testMethod void testGetLookupCandidates()
+    {        
+        Sobject acc = getNewSobject('Account');
+        acc.put('Name', 'Test Account');
+        insert acc;       
+        
+        Sobject contact = getNewSobject('Contact');
+        contact.put('AccountId', acc.get('Id'));
+        contact.put('FirstName', 'Test');
+        contact.put('LastName', 'Test');        
+        insert contact;
+        
+        Test.startTest();
+        Object[] candidates = RelatedListDataGridController.getLookupCandidates('Account', 'Test');        
+        Test.stopTest();
+        
+        System.assertEquals(true, candidates.size() > 0);
+    }
+ 
+    static testMethod void testGetLookupSuggestions()
+    {        
+        Test.setMock(HttpCalloutMock.class, new RestAPIMockHttpResponseGenerator());        
+        
+        Sobject acc = getNewSobject('Account');
+        acc.put('Name', 'Test Account');
+        insert acc;       
+        
+        Sobject contact = getNewSobject('Contact');
+        contact.put('AccountId', acc.get('Id'));
+        contact.put('FirstName', 'Test');
+        contact.put('LastName', 'Test');        
+        insert contact;
+        
+        Test.startTest();          
+        Object[] candidates = RelatedListDataGridController.getLookupSuggestions(contact.Id, 
+                                                                        'Account', 
+                                                                        'AccountId', 
+                                                                        'OwnerId', 
+                                                                        'Test');             
+        Test.stopTest();  
+        
+        System.assertEquals(true, candidates.size() > 0);  
+    }    
 }
