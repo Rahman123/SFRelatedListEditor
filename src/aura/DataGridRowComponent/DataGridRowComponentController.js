@@ -1,12 +1,11 @@
 ({
     doInit : function(component, event, helper) {
         var item = component.get("v.item");        
-        var itemRank = component.get("v.itemRank");
         
         var columns = component.get("v.columns");
         var displayMode = component.get("v.displayMode");
         
-        function getCellComponent(column, index){
+        function getCellComponent(column, index){            
             var columnType = column.type;                    
             if(displayMode == 'read' && 
                column.name.toLowerCase() == 'name'){
@@ -56,7 +55,6 @@
             return [getCellComponent(column, index),{                
                 "aura:id" : "cellWrapper",
                 "item" : item,
-                "itemRank" : itemRank,                
                 "displayMode" : displayMode,                
                 "columnRank" : index,
                 "column" : column				
@@ -102,5 +100,13 @@
             
             updateEvt.fire();
         }            
-    }                      
+    },
+    handleDelete: function(component, event, helper) {
+        var deleteEvt = component.getEvent("onDelete");                
+        deleteEvt.setParams({
+            item: component.get('v.item')
+        });
+        
+        deleteEvt.fire();          
+    }   
 })

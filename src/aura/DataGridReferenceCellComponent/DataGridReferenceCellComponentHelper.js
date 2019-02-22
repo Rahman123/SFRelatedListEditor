@@ -4,14 +4,21 @@
         var column = component.get("v.column");
         
         if(item[column.name]){
-            component.set("v.refValue", "/one/one.app#/sObject/" + item[column.name] + "/view");
-            component.set("v.refLabel", item[column.name + '__Name']);                                
+            component.set("v.refValue", this.sobjectViewUrl(item[column.name]));
+            component.set("v.refLabel", item[column.name + '__Name']);                                      
+            component.set("v.objectId", item.Id);             
         }
         else{
             component.set("v.isSearching", true);                                
         }
         
+        component.set("v.refFieldName", column.name);
         component.set("v.refObjName", column.refObjName);
+        
+        //Set filteredLookupInfo based on the configuration
+        if(column['filteredLookupInfo']){
+            component.set("v.filteredLookupInfo", column['filteredLookupInfo'].join(','));        
+        }
     },
     searchByName : function (component, event) {
         //Clear search result info
@@ -20,9 +27,12 @@
         component.set('v.isSelecting', false);
         
         //Call the controller action
-        var action = component.get("c.getLookupCandidates");
+        var action = component.get("c.getLookupSuggestions");
         action.setParams({
-            refObjName: component.get('v.refObjName'),
+            objectId : component.get('v.objectId'),
+            refObjName : component.get('v.refObjName'),
+            refFieldName :  component.get('v.refFieldName'),
+            lookupFilters :  component.get('v.filteredLookupInfo'),            
             searchTerm: component.get('v.searchTerm')
         });
         

@@ -23,6 +23,10 @@
     color: white;
 }
 
+.THIS .forceRecordEditActions{
+    padding-bottom: 10px;
+}
+
 .THIS .slds-card__body{
     max-width: 100%;
     overflow: auto;

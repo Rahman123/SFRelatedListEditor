@@ -18,6 +18,32 @@
         var viewAllLink = component.find("viewAllLink");
         $A.util.toggleClass(viewAllLink, "hidden");
     },
+    toogleTotal : function(component, event){
+        //Show/hide the total row on the bottom
+        if (component.get("v.aggregate")!=null){
+            var totalComponent = component.find("total");
+            $A.util.toggleClass(totalComponent, "hidden");
+        }
+    },
+    getCellComponents : function(component){
+        var cellComponents = [];
+        var rows = component.find("row");        
+        
+        if(rows){
+            //Only 1 row
+            if(!Array.isArray(rows)){
+                rows = [rows]
+            }
+            
+            rows.forEach(function(row){
+                row.get("v.body").forEach(function(cell){
+                    cellComponents.push(cell);
+                })
+            });
+        }
+        
+        return cellComponents;
+    },
     refreshUIElements : function(component, event){
         //Apply the shadow on the grid
         this.applyShadowEffect(component, event);
@@ -30,28 +56,22 @@
         
         //Toogle the total row
         this.toogleTotal(component, event);
-    },
+    },    
     loadItems : function(component, onSuccess, onError){
         component.set("v.isWorking", true);
         
         //Load items from Salesforce
-        var dataAction = component.get("c.getReleatedItems");
-        var relatedFields = component.get("v.columns")
-        .filter(col => {return col.fieldApiName != null})
-        .map(col => {return col.fieldApiName});
-        
+        var dataAction = component.get("c.getFieldSetItems");
         dataAction.setParams({
-            "objectId": component.get("v.recordId"),
-            "relatedObjName": component.get("v.relatedObjectName"),
-            "refFieldName": component.get("v.refFieldName"),
-            "relatedFields": relatedFields,
-            "filterBy": component.get("v.filter"),
-            "sortBy": component.get("v.sort"),
-            "orderBy": component.get("v.order")
+            "objectName": component.get("v.relatedObjectName"),
+            "fieldSetName": component.get("v.fieldSetName"),
+            "filterBy" : component.get("v.filter"),
+            "sortBy" : component.get("v.sort"),
+            "orderBy" : component.get("v.order")
         });	
         
         dataAction.setCallback(this, function(res) {                                    
-            if (res.getState() === "SUCCESS") {                 
+            if (res.getState() === "SUCCESS") {  
                 var items = res.getReturnValue();   
                 
                 //Clean the items list
@@ -76,31 +96,13 @@
         $A.enqueueAction(dataAction);    
     },
     refreshItems : function(component, items, displayMode){
+        debugger;
         //Set the display mode
         component.set("v.displayMode", displayMode); 
         
         //Refresh the items        
         component.set("v.items", JSON.parse(JSON.stringify(items)));                
-    },
-    getCellComponents : function(component){
-        var cellComponents = [];
-        var rows = component.find("row");        
-        
-        if(rows){
-            //Only 1 row
-            if(!Array.isArray(rows)){
-                rows = [rows]
-            }
-            
-            rows.forEach(function(row){
-                row.get("v.body").forEach(function(cell){
-                    cellComponents.push(cell);
-                })
-            });
-        }
-        
-        return cellComponents;
-    },
+    },    
     checkItems : function(component){
         var cellComponents = this.getCellComponents(component);        
         for(var c=0; c < cellComponents.length; c++){
@@ -128,7 +130,7 @@
             item[column.name] = cellCmp.get("v.value");              
             if(column.type=='Reference'){
                 item[column.name + '__Name'] = cellCmp.get("v.refLabel");
-            }            
+            }    
         });
         
         return items;
@@ -149,21 +151,14 @@
             }
             else{
                 onError(res);                  
-            }
-            
-            component.set("v.isWorking", false);
+            } 
+
+            component.set("v.isWorking", false);            
         });   
         
         $A.enqueueAction(saveItemsAction);
-    },
-    toogleTotal : function(component, event){
-        //Show/hide the total row on the bottom
-        if (component.get("v.aggregate")!=null){
-            var totalComponent = component.find("total");
-            $A.util.toggleClass(totalComponent, "hidden");
-        }
-    },
-    cleanItems : function(component, items, noSort){
+    },    
+    cleanItems : function(component, items){
         var aggregate_map = { 
             sum : function(a, b){return a + b;},
             max : function(a, b){return Math.max(a,b);},
@@ -173,7 +168,7 @@
         var columns = component.get("v.columns");
         var aggregations = Array(columns.length).fill("");     	
         
-        if(items && items.length > 0){
+       	if(items && items.length > 0){              
             //Apply Aggregate
             var json_aggregate = component.get("v.aggregate");                
             
@@ -210,11 +205,11 @@
             items = [];
         }
         
-        //Update the UI     
-        component.set("v.items", items);                   
+        //Update the UI
+        component.set("v.items", JSON.parse(JSON.stringify(items)));                 
         component.set("v.aggregations", aggregations); 
     },
-    notifyItemDeleted : function(component, item){        
+    notifyItemDeleted : function(component, item){
         var newItems = component.get("v.items");
         newItems = newItems.filter(function(elt){
             return item.Id !=  elt.Id;
@@ -222,26 +217,19 @@
         
         this.cleanItems(component, newItems);
     },
-    notifyItemCreated : function(component, recordId){
+    notifyItemCreated : function(component, recordId){ 
         component.set("v.isWorking", true);
         
-        var dataAction = component.get("c.getReleatedItems");
-        var relatedFields = component.get("v.columns")
-        .filter(col => {return col.fieldApiName != null})
-        .map(col => {return col.fieldApiName});
-        
+        var dataAction = component.get("c.getReleatedItems");       
         var recordFilter = JSON.stringify({Id : recordId});
         
         dataAction.setParams({
-            "objectId": component.get("v.recordId"),
-            "relatedObjName": component.get("v.relatedObjectName"),
-            "refFieldName": component.get("v.refFieldName"),
-            "relatedFields": relatedFields,
+            "objectName": component.get("v.relatedObjectName"),
+            "fieldSetName": component.get("v.fieldSetName"),                       
             "filterBy": recordFilter,
             "sortBy": null,
             "orderBy": null
-        });	               
-        
+        });	
         
         dataAction.setCallback(this, function(res) {                                    
             if (res.getState() === "SUCCESS") {                 
@@ -258,14 +246,6 @@
             component.set("v.isWorking", false);
         });   
         
-        $A.enqueueAction(dataAction);    		        
-    },
-    viewAllUrl : function(itemId, relatedList) {
-        if(window.location.href.indexOf('one.app') == -1){
-            return "/lightning/r/" + itemId + "/related/" + relatedList + "/view";
-        }
-        else{
-            return "/one/one.app#/sObject/" + itemId + "/rlName/" + relatedList + "/view";;
-        }
-    }     
- })
+        $A.enqueueAction(dataAction);       		        
+    }
+})

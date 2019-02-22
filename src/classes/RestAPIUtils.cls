@@ -1,7 +1,9 @@
 public with sharing class RestAPIUtils {
     static public String SF_HOST = System.Url.getSalesforceBaseURL().toExternalForm();
-    static public String QUERY_API_URL = SF_HOST + '/services/data/v39.0/tooling/query/?q=';
-    static public String SOBJECT_API_URL = SF_HOST + '/services/data/v39.0/sobjects/';   
+    static public String QUERY_API_URL = SF_HOST + '/services/data/v44.0/tooling/query/?q=';
+    static public String SOBJECT_API_URL = SF_HOST + '/services/data/v44.0/sobjects/';   
+    static public String UI_API_URL = SF_HOST + '/services/data/v44.0/ui-api/';   
+
     
     /**
      * Helper function to call the SF Rest API
@@ -76,6 +78,16 @@ public with sharing class RestAPIUtils {
     }
     
     /**
+     * Helper function to call the SF UI API
+     * */
+    public Static String callUiAPI(String query)
+    {  
+        return callRestAPI(UI_API_URL + query, 
+                           getSessionId(),
+                           'GET', null);        
+    }
+    
+    /**
      * Return the related lists metadata 
      * For a given object Id and a record type name
      * */
@@ -126,6 +138,10 @@ public with sharing class RestAPIUtils {
         }
     } 
     
+    /**
+     * Return the object data
+     * For a given object Id
+     * */
     public static Map<String, Object> getObject(Id objectId)
     {
         String objectName = objectId.getSobjectType().getDescribe().getName();        
@@ -135,6 +151,10 @@ public with sharing class RestAPIUtils {
         return (Map<String, Object>)JSON.deserializeUntyped(jsonData);                 
     }
     
+    /**
+     * Return the record type name
+     * For a given object Id
+     * */
     public static String getObjectRecordTypeName(Id objectId)
     {
         Map<String, Object> mObject = getObject(objectId);
@@ -146,5 +166,71 @@ public with sharing class RestAPIUtils {
         }
         
         return 'Master';
-    }    
+    } 
+    
+    /**
+     * Return the lookup filters information 
+     * For a given object name
+     * */
+    public static Map<String, Object> getLookupFiltersMetadata(String objectName)
+    {   
+        String jsonObjInfo = callUiAPI('object-info/' + objectName);             
+        Map<String, Object> objMetadata = (Map<String, Object>)JSON.deserializeUntyped(jsonObjInfo);
+        Map<String, Object> fieldsMetadata = (Map<String, Object>)objMetadata.get('fields');
+        Map<String, Object> result = new Map<String, Object>();
+        
+        //Iterate over the fields and process only references
+        for(String fieldName : fieldsMetadata.keySet()){            
+            Map<String, Object> fieldInfo = (Map<String, Object>)fieldsMetadata.get(fieldName);
+            
+            if(fieldInfo.get('dataType') == 'Reference' && fieldInfo.get('filteredLookupInfo') != null){ 
+                result.put(fieldName, ((Map<String, Object>)fieldInfo.get('filteredLookupInfo')).get('controllingFields')); 
+            }                        
+        }
+       
+        return result;
+    }
+    
+    /**
+     * Return the lookup field Suggestions  
+     * For a given lookup field
+     * */
+    public static Object[] getLookupFieldSuggestions(String objName,
+                                                     String refObjName, 
+                                                     String refFieldName, 
+                                                     String dependentFieldBindings, 
+                                                     String searchTerm)
+    {   
+        List<Object> records = new List<Object>();
+        String query = 'lookups/' + objName + '/' + refFieldName;
+        query += '?searchType=TypeAhead&q=' + searchTerm;
+
+        if(!String.isBlank(dependentFieldBindings)){
+            query += '&dependentFieldBindings=' + dependentFieldBindings;
+        }
+                 
+        Map<String, Object> lookupResults = (Map<String, Object>)JSON.deserializeUntyped(callUiAPI(query));
+        System.debug(lookupResults);
+        if(lookupResults != null && lookupResults.get('lookupResults') != null){
+            lookupResults = (Map<String, Object>)lookupResults.get('lookupResults');            
+            if(lookupResults != null && lookupResults.get(refObjName) != null){
+                Map<String, Object> objectMap = (Map<String, Object>)lookupResults.get(refObjName);
+                for(Object record : (Object[])objectMap.get('records')){
+                    Map<String, Object> recordMap = (Map<String, Object>)record;
+                    recordMap = (Map<String, Object>)recordMap.get('fields');
+                    
+                    Map<String, Object> simpleRecord = new Map<String, Object>();
+                    for(String fieldName : recordMap.keySet()){
+                        Map<String, Object> fieldMap = (Map<String, Object>)recordMap.get(fieldName);                        
+                        simpleRecord.put(fieldName, fieldMap.get('value'));
+                    }
+                    records.add(simpleRecord);
+                }
+                
+                return records;
+            }
+        }
+        
+        return null;
+    }
 }

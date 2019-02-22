@@ -1,29 +1,24 @@
 <aura:component implements="flexipage:availableForAllPageTypes,forceCommunity:availableForAllPageTypes,force:hasRecordId" 
                 controller="RelatedListDataGridController"
                 access="global" >       
-    <aura:attribute name="relatedListLabel" type="String" access="global"/>     
-    <aura:attribute name="relatedObjectName" type="String" default=""/> 
-    <aura:attribute name="relatedListName" type="String"/> 
-    <aura:attribute name="refFieldName" type="String"/> 
-    
-    <aura:attribute name="columns" type="Object[]"/>
-    <aura:attribute name="items" type="Object[]"/>
-    <aura:attribute name="oldItems" type="Object[]"/>
-    
-    <aura:attribute name="displayMode" type="String" default="read"/>
-    
+    <aura:attribute name="relatedObjectName" type="String" access="global"/> 
+    <aura:attribute name="fieldSetName" type="String" access="global"/> 
     <aura:attribute name="canCreate" type="Boolean" default="true" access="global"/>
     <aura:attribute name="filter" type="String" access="global"/>
     <aura:attribute name="aggregate" type="String" access="global"/>
-    <aura:attribute name="aggregations" type="Object[]"/>
-    
     <aura:attribute name="defaultValues" type="String" default="{}" access="global"/>
     <aura:attribute name="customLabel" type="String" access="global"/> 
     <aura:attribute name="customIcon" type="String" default="standard:contact" access="global"/> 
     <aura:attribute name="sort" type="String" access="global"/>
     <aura:attribute name="order" type="String" access="global" default="desc"/>
     
-    <aura:attribute name="viewAllLink" type="String"/>    
+    <aura:attribute name="displayMode" type="String" default="read" access="private"/>        
+    <aura:attribute name="columns" type="Object[]" access="private"/>
+    <aura:attribute name="aggregations" type="Object[]" access="private"/>    
+    <aura:attribute name="items" type="Object[]" access="private"/>
+    <aura:attribute name="oldItems" type="Object[]" access="private"/>    
+    
+    
     <aura:attribute name="displayLabel" type="String"/>    
     
     <aura:attribute name="mouseStart" type="string" />
@@ -64,7 +59,7 @@
                 </aura:if>
             </div>
         </div>
-        <div class="slds-card__body">            
+        <div class="slds-card__body">
             <table class="slds-table slds-table--bordered slds-no-row-hover 
                           slds-table--cell-buffer slds-table_resizable-cols" 
                    style="table-layout:auto"
@@ -72,11 +67,11 @@
                 <thead>
                     <tr class="slds-text-title--caps">
                         <aura:iteration items="{!v.columns}" var="column">
-                            <th scope="col" class="slds-is-resizable slds-is-sortable">
+                            <th scope="col" class="slds-is-resizable">
                                 <div onmousemove="{!c.setNewColWidth}">                                    
                                     <a role="button" 
                                        name="{!column.name}"
-                                       onclick="{!c.handleSort}" 
+                                       onclick="{!c.handleSort}"
                                        class="{!'slds-th__action slds-text-link_reset ' +
                                               if(v.displayMode != 'read', 'link-disabled', '')}">
                                         <aura:if isTrue="{!v.sort == column.name}">
@@ -85,10 +80,10 @@
                                                                       if(v.order == 'desc', 'arrowdown', 'arrowup')}"/>
                                         </aura:if>
                                         <span class="slds-truncate" title="{!column.label}"> {!column.label}</span>
-                                    </a>                                         
+                                    </a>                                   
                                     <div class="slds-resizable">
                                         <input type="range" min="20" max="1000" class="slds-resizable__input slds-assistive-text" id="cell-resize-handle-assignment" tabindex="-1" />
-                                        <span class="slds-resizable__handle" onmousedown="{!c.calculateColWidth}"/>
+                                        <span class="slds-resizable__handle" onmousedown="{!c.calculateColWidth}"/>                                            
                                     </div>
                                 </div>
                             </th>
@@ -101,7 +96,7 @@
                                     var="item">                  
                         <c:DataGridRowComponent aura:id="row"
                                                 item="{!item}" 
-                                                columns="{!v.columns}"  
+                                                columns="{!v.columns}"
                                                 displayMode="{!v.displayMode}"
                                                 onDelete="{!c.actionDelete}"/>                                
                     </aura:iteration>   
@@ -113,9 +108,7 @@
                     </tr>                      
                 </tbody>
             </table>
-        </div>
-        
-        
+        </div>       
         <div aura:id="gridActions" class="forceRecordEditActions hidden">
             <div class="slds-align_absolute-center">
                 <button type="button" 
@@ -130,12 +123,6 @@
                 </button>
             </div>
         </div> 
-        
-        <div aura:id="viewAllLink" class="slds-card__footer">
-            <div class="slds-align_absolute-center">
-                <ui:outputURL value="{!v.viewAllLink}" label="View All"/>              
-            </div>
-        </div>                 
         <aura:if isTrue="{! v.isWorking }">
             <lightning:spinner alternativeText="Processing"                            
                                style="background: transparent;"
@@ -144,5 +131,5 @@
     </article>  
     
     <c:DataGridDialogComponent aura:id="deleteDialog" type="CONFIRM" onClose="{!c.deleteCallback}" />           
-    <c:DataGridDialogComponent aura:id="loaderDialog" type="LOADER" />
+    <c:DataGridDialogComponent aura:id="loaderDialog"/>
 </aura:component>

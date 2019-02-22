@@ -1,5 +1,0 @@
-<apex:page standardController="Lead" extensions="MC4SF.SubscriberController">
-
-<c:Subscriber subscriber="{!subscriberId}"/>
-
-</apex:page>

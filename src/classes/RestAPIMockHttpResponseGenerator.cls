@@ -30,6 +30,13 @@ global class RestAPIMockHttpResponseGenerator  implements HttpCalloutMock {
             mock.setStaticResource('TestAccountDetailsResponse');
         }
         
+        else if (endPoint.contains('/ui-api/object-info')){
+            mock.setStaticResource('TestContactObjectInfoResponse');
+        }
+        
+        else if (endPoint.contains('/ui-api/lookups')){
+            mock.setStaticResource('TestAccountSuggestionsResponse');
+        }
         return mock.respond(req);
     }
 }

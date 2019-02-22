@@ -1,5 +1,0 @@
-<apex:page standardController="Contact" extensions="MC4SF.MembershipController">
-
-<c:Membership subscriber="{!subscriberId}"/>
-
-</apex:page>
